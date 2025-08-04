@@ -1,0 +1,238 @@
+
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+
+<html>
+
+<head>
+<title>Okoun Picture Uploader</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Language" content="cs">
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<meta name="description" content="Okoun Picture Uploader">
+<meta name="author" content="Lucifer & Radar">
+<meta name="robots" content="index, follow">
+<meta name="googlebot" content="index, follow, snippet, archive">
+<meta name="Copyright" content="Radar, Lucifer &amp; spol. s r.o.">
+<link href="https://fonts.googleapis.com/css?family=Roboto:400,700|Merriweather:400,700&subset=latin,latin-ext" rel="stylesheet" type="text/css">
+<link rel="icon" type="image/x-icon" href="favicon.ico">
+<link rel="stylesheet" href="templates/css/styly-main.css?opu250227">
+<link rel="stylesheet" href="templates/css/styly-responsive.css?opu250227">
+<script type="text/javascript" src="templates/js/jquery.js?opu250227"></script>
+<script type="text/javascript" src="templates/js/jscript.js?opu250227"></script>
+<style>
+.custom-alert {
+	position: fixed;
+	top: 50%;
+	left: 50%;
+	min-width: 300px;
+    max-width: 90%;
+	transform: translate(-50%, -50%);
+	background-color: #f8d7da;
+	color: #842029;
+	padding: 30px 40px;
+	border-radius: 8px;
+	box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+	font-family: Arial, sans-serif;
+	font-size: 14px;
+	text-align: center;
+	z-index: 1000;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	opacity: 1;
+	filter: none;
+	background-image: none;
+}
+
+.custom-alert .ok-btn {
+	margin-top: 15px;
+	padding: 10px 20px;
+	font-size: 16px;
+	background-color: #842029;
+	color: #ffffff;
+	border: none;
+	border-radius: 5px;
+	cursor: pointer;
+}
+
+.custom-alert .close-btn {
+	position: absolute;
+	top: 5px;
+	right: 5px;
+	background: none;
+	border: none;
+	font-size: 18px;
+	font-weight: bold;
+	color: #000000;
+	cursor: pointer;
+}
+
+.custom-alert .ok-btn:hover {
+	background-color: #5a1a1e;
+}
+
+.custom-alert.fade-out {
+	opacity: 0;
+	transition: opacity 0.5s ease;
+}
+</style>
+</head>
+
+<body>
+
+<div class="parent">
+
+<div class="chi2">&nbsp;</div>
+
+<div class="child">
+<font class="nadpic">&nbsp;</font>
+
+<div class="opunadpis">
+		<a href="?page=userpanel"><img src="templates/design/default-icon.jpg" class="ico" align="top"></a>
+
+	<span class="opunadpis-wrap ">
+		<a href="https://opu.peklo.biz/" class="opu"><font class="podnadpic">O</font>koun <font class="podnadpic">P</font>icture <font class="podnadpic">U</font>ploader</a>
+	</span>
+
+		<div class="userpanel">
+			<a href="?page=userpanel" class="opu1">blasnik</a> 
+			<a href="?page=settings" class="opu1 small">[ nastavení ]</a> 
+			<a href="?page=relace" class="opu1 small">[ relace ]</a> 
+			<a href="?page=odhlaseni" class="opu1 small">[ odhlásit ]</a>
+		</div>
+</div>
+
+
+<div align="center">
+
+<form id="xpc" action="opupload.php" style="font-size: 15px; line-height: normal; display: inline;" method="post" enctype="multipart/form-data">
+
+	<fieldset style="width: 920px; background: transparent; border-color: #888888; border-style: solid; font-size: 15px; text-align: left;">
+
+		<legend>
+		<font style="background-color: Silver; color: black;">&nbsp;Lokální oprásek (lze i Ctrl+V či jiné paste)&nbsp;</font>
+		</legend>
+
+		<font class="tx1">&nbsp; Oprásek: &nbsp;</font>
+		<input name="obrazek[]" id="obrazek" type="file" class="for3" size="55" multiple>
+&nbsp;&nbsp;&nbsp;
+
+		<div class="tl_odeslat-wrap" style="float: right;">&nbsp;&nbsp;&nbsp;<input type="submit" name="tl_odeslat" value="Odeslat" id="tl_odeslat"></div>
+
+		<img id="xpc-ctrlv" style="display: none; max-width: 100%; max-height: 150px; margin: 10px 0 -20px;">
+		<span id="dimensions-output" style="padding: 5px; position: inherit; background-color: silver; color: black; opacity: 0.8; display: none;"></span>
+
+		<br><br>
+
+		<div class="tx1">Rozměry oprásku:&nbsp;&nbsp;
+			<span class="tx1-label"><input type="radio" name="sizep" value="0" id="sizep0" checked><label for="sizep0" class="tx1"> ponechat</label></span>
+				<span class="tx1-spacer">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>
+			<span class="tx1-label"><input type="radio" name="sizep" value="1" id="sizep1"><label for="sizep1" class="tx1"> 480 x ?</label></span>
+				<span class="tx1-spacer">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>
+			<span class="tx1-label"><input type="radio" name="sizep" value="2" id="sizep2"><label for="sizep2" class="tx1"> 640 x ?</label></span>
+				<span class="tx1-spacer">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>
+			<span class="tx1-label"><input type="radio" name="sizep" value="3" id="sizep3"><label for="sizep3" class="tx1"> 960 x ?</label></span>
+				<span class="tx1-spacer">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>
+			<span class="tx1-label"><input type="radio" name="sizep" value="4" id="sizep4"><label for="sizep4" class="tx1"> 1200 x ?</label></span>
+				<br>
+		</div>
+
+		<div class="tx1" style="padding-top: 7px;">Výstupní formát:&nbsp;&nbsp;
+		<span class="tx1-label"><input type="radio" name="outputf" value="auto" id="outputf0" checked="checked"><label for="outputf0" class="tx1"> automaticky</label></span> <span class="tx1-spacer">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>
+		<span class="tx1-label"><input type="radio" name="outputf" value="png" id="outputf1"><label for="outputf1" class="tx1"> PNG</label></span> <span class="tx1-spacer">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>
+		<span class="tx1-label"><input type="radio" name="outputf" value="jpeg" id="outputf2"><label for="outputf2" class="tx1"> JPG</label></span> <span class="tx1-spacer">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>
+		</div>
+
+	</fieldset>
+
+</form>
+
+<br>
+
+<form id="xhttp" action="opupload.php" method="post" style="line-height: normal; display: inline;">
+	
+	<fieldset style="width: 920px; background: transparent; border-color: #888888; border-style: solid; font-size: 15px; text-align: left;">
+
+		<legend>
+		<font style="background-color: Silver; color: black;">&nbsp;Re-upload oprásku odněkud z internetůch&nbsp;</font>
+		</legend>
+
+		<font class="tx1">&nbsp;Adresa oprásku: &nbsp;</font>
+		<br clear="all">
+		<input type="text" name="url" id="url" style="width: 920px; height: 18px; font-size: 11px; margin-top: 5px">
+
+		<br clear="all">
+
+		<div class="tl_odeslat-wrap" style="float: right; margin-top: 10px;">
+		&nbsp;&nbsp;<input type="submit" name="tl_odeslat_hatetepe" value="Odeslat" id="tl_odeslat_hatetepe"></div>
+
+		<br><div class="tx1">Rozměry oprásku:&nbsp;&nbsp;
+
+			<span class="tx1-label"><input type="radio" name="sizep" value="0" id="sizehttp0" checked><label for="sizehttp0" class="tx1"> ponechat</label></span>
+				<span class="tx1-spacer">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>
+			<span class="tx1-label"><input type="radio" name="sizep" value="1" id="sizehttp1"><label for="sizehttp1" class="tx1"> 480 x ?</label></span>
+				<span class="tx1-spacer">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>
+			<span class="tx1-label"><input type="radio" name="sizep" value="2" id="sizehttp2"><label for="sizehttp2" class="tx1"> 640 x ?</label></span>
+				<span class="tx1-spacer">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>
+			<span class="tx1-label"><input type="radio" name="sizep" value="3" id="sizehttp3"><label for="sizehttp3" class="tx1"> 960 x ?</label></span>
+				<span class="tx1-spacer">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>
+			<span class="tx1-label"><input type="radio" name="sizep" value="4" id="sizehttp4"><label for="sizehttp4" class="tx1"> 1200 x ?</label></span>
+				<br>
+		</div>
+
+	</fieldset>
+
+</form>
+
+</div>
+		
+<div id="uploading" style="display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);"><img src="templates/design/progress2.gif" style="width: 164px; height: 164px;" alt="Uploading..." /></div>
+
+<div align="right" class="podopu"><a href="?page=faq" class="opu">F.A.Q.</a> &nbsp;&nbsp;&nbsp;<a href="https://peklo.biz" style="color: #a0a0a0;"><font style="font-size: 13pt; color: #fff;">P</font>eklo.<font style="font-size: 13pt; color: #fff;">B</font>iz</a> </div>
+
+<script>
+const fileInput = document.getElementById("obrazek");
+window.addEventListener('paste', e => {
+	if(e.clipboardData.getData('text').indexOf('http', 0) === 0 && e.target.localName != 'input') {
+		document.getElementById("url").value = e.clipboardData.getData('text');
+	} else {
+		fileInput.files = e.clipboardData.files;
+		$("#outputf2").prop('checked', true);
+		if (e.clipboardData.files.length && fileInput.files && fileInput.files[0]) {
+			var reader = new FileReader();
+			reader.onload = function (e) {
+				document.getElementById("xpc-ctrlv").src = e.target.result;
+				document.getElementById("xpc-ctrlv").style.display = 'block';
+				
+				 // Zjištění rozměrů obrázku
+                const img = new Image();
+                img.onload = function () {
+                    const width = img.width;
+                    const height = img.height;
+
+					document.getElementById("dimensions-output").style.display = 'inline';
+                    document.getElementById("dimensions-output").textContent = 
+                        `[${ width } x ${ height } px]`;
+                };
+                img.src = e.target.result; // Nastavení zdroje pro načtení obrázku
+				
+			}
+			reader.readAsDataURL(fileInput.files[0]);
+		} else {
+			document.getElementById("xpc-ctrlv").style.display = 'none';
+			document.getElementById("dimensions-output").style.display = 'none';
+			document.getElementById("dimensions-output").textContent = '';
+		}
+	}
+});
+</script>
+
+
+
+</div>
+<br clear="all">
+
+</div>
+
+</body>
+</html>

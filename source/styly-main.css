@@ -1,0 +1,716 @@
+body
+{
+    margin: 0px;
+    padding: 3px;
+    font-family: Roboto;
+    font-size: 12px;
+    background: #333333;
+    color: #D0D0D0;
+    background-image:  url("../design/bg/krysismrt.jpg");
+    background no-repeat center center fixed;
+    -webkit-background-size: cover;
+    -moz-background-size: cover;
+    -o-background-size: cover;
+    background-size: cover;
+}
+
+.wrap {
+    display: -webkit-box; display: -ms-flexbox; display: flex;
+    -webkit-box-pack: center; -ms-flex-pack: center; justify-content: center;
+    -webkit-box-align: center; -ms-flex-align: center; align-items: center;
+    min-height: 100%;
+}
+.main
+{
+	  width: 1050px;
+    background-color: #181818;
+    border: 1px solid #909090;
+    opacity: 0.90;
+    margin: auto;
+    padding: 14px;
+    font-family: arial;
+    font-size: 16px;
+    font-weight: bold;
+    color: #999;
+}
+
+.nadpic
+{
+    font-size: 26px;
+    color: #AAAAAA;
+}
+
+
+.podnadpic
+{
+    font-size: 22px;
+    color: #f0f0f0;
+}
+
+
+.parent
+{
+  position: relative;
+  height: 100%;
+}
+
+.child 
+{
+  border: 1px solid #909090 !important;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 1050px;
+  background-color: #000000c9;
+  border: 0px;
+  opacity: 0.77;
+  padding: 12px;
+  font-family: arial;
+  font-size: 16px;
+  font-weight: bold;
+  color: #999;
+}
+
+div.box
+{
+width: 220px;
+height: 232px; 
+margin: auto; 
+float: left; 
+border: 1px solid #444;
+background-color: #0000; 
+text-align: center; 
+padding: 3px; 
+font-family: Roboto;
+font-size: 12pt;
+margin: 4px;
+position: relative;
+}
+
+div.box:hover
+
+{
+border: 1px solid #ddd; 
+background-color: #222;
+}
+
+
+div.boxtop
+{
+width: 220px;
+height: 232px; 
+margin: auto; 
+float: left; 
+border: 1px solid #cb0;
+background-color: #210; 
+text-align: center; 
+padding: 3px; 
+font-family: Roboto;
+font-size: 12pt;
+margin: 4px;
+position: relative;
+}
+
+div.boxtop:hover
+
+{
+border: 1px solid #fe4; 
+background-color: #430;
+}
+
+
+
+img.inbox
+{
+border: 1px solid #666;
+margin-top: 3px;
+padding: 1px;
+display: block;
+max-width:200px;
+max-height:160px;
+width: auto;
+height: auto;
+margin: auto;
+}
+
+
+img.inbox:hover
+{
+border: 1px solid #fff;
+}
+
+
+video.inbox
+{
+border: 1px solid #666;
+margin-top: 3px;
+display: block;
+max-width:200px;
+max-height:160px;
+width: auto;
+height: auto;
+margin: auto;
+}
+
+video.inbox:hover
+{
+border: 1px solid #fff;
+}
+
+
+div.pod
+
+{
+position: absolute;
+bottom: 0;
+width: 220px;
+text-align: left;
+padding-bottom: 4px;
+padding-left: 6px;
+font-family: Arial;
+
+}
+
+div.pod1
+{
+float: right;
+margin-right: 6px;
+}
+
+div.pod2
+{
+bottom: 27px;
+text-align: center;
+font-size: 10pt;
+background-color: #0000;
+}
+
+p.chan
+{
+background-color: #000f;
+color: #888;
+margin: 2px;
+padding: 0px;
+padding-left: 4px;
+padding-right: 4px;
+font-weight: bold;
+font-family: "Roboto", sans-serif;
+}
+
+p.cod
+{
+background-color: #eee;
+font-weight: normal;
+}
+
+a.opu
+{
+color: #888;
+text-decoration: none;
+}
+
+a.opu:hover
+{
+text-decoration: underline;
+}
+
+
+a.opu1
+{
+color: #bbb;
+text-decoration: none;
+}
+
+a.opu1:hover
+{
+color: #fff;
+text-decoration: underline;
+}
+
+
+font.selected
+{
+font-size: 14pt; 
+color: #eee; 
+text-decoration: underline;
+}
+
+
+font.pod
+{
+font-size: 15pt;
+color: #fff;
+}
+
+font.vyr
+{
+color: #fff;
+}
+
+font.podskrt
+{
+font-size: 16pt;
+color: #fff;
+text-decoration: underline;
+}
+
+div.chi2
+{
+height: 60px;
+}
+
+div.userpanel
+{
+font-size: 12pt; 
+float-left; 
+position: relative; 
+margin-left: 54px; 
+margin-top: -16px; 
+margin-bottom: 0px;
+}
+
+div.kvik
+{
+position: absolute;
+right: 0px;
+bottom: 0px;  
+font-size: 35pt; 
+font-weight: bold; 
+color: #8886;
+margin-right: 20px;
+margin-bottom: 20px;
+}
+
+
+
+img.ico
+{
+width: 40px; 
+height: 50px; 
+border: 1px solid #555; 
+margin-right: 10px;
+}
+
+a.small
+{
+font-size: 10pt; 
+}
+
+div.uspas
+{
+font-size: 11pt;
+text-align: right;
+width: 50%; 
+margin: 8px;
+color: #eee;
+}
+
+div.usset
+{
+font-size: 11pt;
+text-align: right;
+margin: 8px;
+margin-bottom: 10px;
+margin-right: 30px;
+color: #bbb;
+float: right;
+}
+
+ div.ussetmarg1
+{
+margin-right: 50px;
+}
+
+ div.ussetmarg2
+{
+margin-right: 110px;
+}
+
+ div.ussetmain
+{
+width: 60%;
+margin: auto;
+padding-left: 80px;
+}
+
+ div.newuspas
+{
+font-size: 14pt;
+color: #fff;
+margin-top: 35px;
+margin-bottom: 8px;
+}
+
+ div.newuspasz
+{
+font-size: 11pt;
+color: #eee;
+margin-top: 45px;
+margin-bottom: 8px;
+width: 300px;
+text-align: left;
+color: #aaa;
+font-weight: normal;
+}
+
+
+div.uspaskukis
+{
+font-size: 11pt;
+text-align: justify;
+width: 50%; 
+margin: 8px;
+margin-top: 14px;
+color: #bbb;
+}
+
+div.w85
+{
+width: 85%;
+}
+
+input.uspas
+{
+font-size: 11pt;
+background-color: #444;
+color: #fff;
+border: 1px solid #fff;
+width: 170px;
+border-radius: 6px;
+}
+
+input.uspas:hover
+{
+background-color: #fff;
+color: #000;
+border: 1px solid #fff;
+}
+
+
+input.usus
+{
+width: 170px;
+font-size: 11pt;
+background-color: #ddd;
+color: #000;
+border: 1px solid #fff;
+border-radius: 6px;
+}
+
+input.usus:hover
+{
+background-color: #fff;
+color: #000;
+}
+
+input.uspas2
+{
+font-size: 11pt;
+background-color: #999;
+color: #000;
+border: 1px solid #ccc;
+width: 200px;
+border-radius: 5px;
+}
+
+input.uspas2:hover
+{
+font-size: 11pt;
+background-color: #bbb;
+color: #000;
+border: 1px solid #fff;
+width: 200px;
+}
+
+
+button.uspas
+{
+width: 90px;
+color: #eee;
+}
+
+input.permuspas
+{
+margin-right: 40px;
+}
+
+div.podopu
+{
+margin-top: 12px;
+margin-right: 10px;
+font-size: 10pt;
+}
+
+div.opunadpis
+{
+float: left;
+margin-top: 2px;
+margin-left: 15px;
+margin-bottom: 18px;
+}
+
+.for3
+{
+  color: #a0a0a0;
+  width: 260px;
+}
+
+.tx1
+{
+  font-size: 15px;
+  color: Silver;
+}
+
+a.link
+{
+color: #fff;
+text-decoration: underline;
+background-color: #0000;
+padding: 2px;
+padding-left:3px;
+padding-right: 3px;
+border-radius: 4px;
+}
+
+a.link:hover
+{
+background-color: #fff;
+color: #000;
+text-decoration: none;
+}
+
+div.star
+{
+float:left;
+position: absolute;
+margin: 0px;
+padding: 0px;
+margin-left: 2px;
+margin-top: -7px;
+font-size: 23px;
+}
+
+div.star button {
+  color: #999;
+  padding: 0;
+  background: none;
+  border: none;
+  font-size: 23px;
+  cursor: pointer;
+  margin-top: 2px;
+}
+div.star button::after {
+  content: '\0026E7'; /* â›§ &#9959; */
+}
+div.star button:hover {
+  color: #fff;
+}
+div.star button.is-active {
+  color: #ed0;
+  margin-top: 5px;
+  margin-left: 2px;
+  transform: rotate(180deg) scaleX(-1);;
+}
+div.star button.is-active::after {
+  content: '\002605'; /* â˜… &#9733; */
+}
+div.star button.is-active:hover {
+  color: #fe0;
+}
+
+div.nostar
+{
+float:left;
+position: absolute;
+margin: 0px;
+padding: 0px;
+margin-left: 2px;
+margin-top: -7px;
+font-size: 23px;
+}
+
+
+div.pagination
+{
+float: none;
+font-size: 12pt;
+}
+
+div.pagination > label > a
+{
+margin-left: 5px;
+padding: 0px;
+border: none;
+}
+
+div.pagination > label > a:hover
+{
+color: #fff;
+text-decoration: underline;
+}
+
+
+div.pagination > label.vybrana
+{
+margin-left: 5px;
+padding: 0px;
+border: none;
+background-color: #7770;
+font-size: 16pt;
+font-weight: bold;
+text-decoration: underline;
+}
+
+div.pagiup
+{
+float: right;
+paddinng: 0px;
+margin: 0px;
+margin-left: 5px;
+margin-top: 0px;
+}
+
+div.pagidown
+{
+float: left;
+paddinng: 0px;
+margin: 0px;
+margin-left: 35px;
+margin-top: 12px;
+}
+
+div.pages
+{
+float: right;
+margin-top: 0px;
+font-size: 11pt;
+margin-right: 5px;
+margin-left: 35px;
+}
+
+div.pagesbottom
+{
+margin-top: 12px; 
+font-size: 11pt;
+float: left;
+}
+
+div.pkl
+{
+float: right; 
+margin-right: 25px;
+font-size: 12pt;
+margin-top: 12px; 
+ 
+}
+
+form.form
+{
+margin-bottom: 38px;
+}
+
+.pagination {
+
+	a,
+	.vybrana {
+		display: inline-block;
+		color: #999;
+		line-height: 24px;
+		text-align: center;
+		margin: 0 5px;
+		padding: 0 1rem;
+		border: 1px solid #ddd;
+		border-radius: 5px;
+		text-decoration: none;
+	}
+	a:hover {
+		border-color: #444;
+	}
+	.vybrana {
+		font-weight: 500;
+		background: #444;
+		border-color: #444;
+		color: #fff;
+	}
+	
+
+}
+
+img.done
+{
+max-width:290px; 
+max-height:150px; 
+width: auto; 
+height: auto;
+}
+  
+button.copy-btn
+{
+background-color: #e6e6e6;
+color: #000;
+border-radius: 4px;
+font-size: 12px;
+font-family: arial;
+font-weight: bold;
+height: 22px;
+padding: 0px;
+margin-bottom: 1px;
+}
+
+.width35
+{
+width: 35px;
+}
+
+.width40
+{
+width: 40px;
+}
+
+
+.width45
+{
+width: 45px;
+}
+
+.width50
+{
+width: 50px;
+}
+
+.width60
+{
+width: 60px;
+}
+
+.width70
+{
+width: 60px;
+}
+
+.width80
+{
+width: 80px;
+}
+
+div.prihlas
+{
+float: left;
+margin-left: 35px;
+margin-top: 8px;
+}
+
+.overlay {
+    position: absolute;
+    top: 16px;
+    right: 8px;
+    background: #fe0;
+    color: black;
+    font-weight: bold;
+    padding: 4px 8px;
+    border-radius: 50%;
+    font-size: 14px;
+    z-index: 10;
+    display: none;
+}
