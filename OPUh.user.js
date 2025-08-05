@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OPUh
 // @namespace    http://opu.peklo.biz/
-// @version      3.0 LAST TABLE work
+// @version      3.05
 // @description  Image preview, crop, resize, delete, drag reorder, smart size & filename
 // @match        https://opu.peklo.biz/
 // @grant        none
@@ -64,8 +64,29 @@
     }
     #opu-crop-btns {
       display: flex; justify-content: space-between; margin-top: 10px;
-    }`;
+    }
+    .opu-overlay {
+      position: absolute;
+      top: 0;
+      right: 0;
+      background-color: rgba(0,0,0,0.8);
+      color: #fff;
+      display: none;
+      gap: 5px;
+      padding: 3px 5px;
+      cursor: pointer;
+      border-radius: 0 0 0 5px;
+    }
+  `;
   document.head.appendChild(style);
+
+  function truncateName(name, maxLen = 24) {
+    if (name.length <= maxLen) return name;
+    const extIndex = name.lastIndexOf('.');
+    const base = name.slice(0, extIndex);
+    const ext = name.slice(extIndex);
+    return base.slice(0, maxLen - ext.length - 3) + '...' + ext;
+  }
 
   function formatFileSize(bytes) {
     return bytes >= 1048576
@@ -127,7 +148,7 @@
 
     const info = document.createElement('span');
     info.style.fontSize = '12px';
-    info.style.textAlign = 'center';
+    info.style.textAlign = 'left';
     info.style.display = 'block';
 
     if (!isSupported) {
@@ -147,37 +168,28 @@
     previewImg.style.maxHeight = '150px';
 
     previewImg.onload = () => {
-      info.textContent = `${file.name}, ${previewImg.naturalWidth}×${previewImg.naturalHeight}px, ${formatFileSize(file.size)}`;
+      info.innerHTML = `${truncateName(file.name)}<br>${previewImg.naturalWidth}×${previewImg.naturalHeight}px<br>${formatFileSize(file.size)}`;
     };
 
     wrapper.appendChild(previewImg);
     wrapper.appendChild(info);
     cell.appendChild(wrapper);
 
+    // Attach overlay to image wrapper
     const overlay = createOverlay(wrapper, cell, file, isOriginal, originalCell);
+    wrapper.addEventListener('mouseover', () => (overlay.style.display = 'flex'));
+    wrapper.addEventListener('mouseout', () => (overlay.style.display = 'none'));
     wrapper.appendChild(overlay);
   }
 
   function createOverlay(wrapper, cell, file, isOriginal, originalCell) {
     const overlay = document.createElement('div');
-    overlay.style.position = 'absolute';
-    overlay.style.top = '0';
-    overlay.style.right = '0';
-    overlay.style.backgroundColor = 'rgba(0,0,0,0.8)';
-    overlay.style.color = '#fff';
-    overlay.style.display = 'none';
-    overlay.style.gap = '5px';
-    overlay.style.padding = '3px 5px';
-    overlay.style.cursor = 'pointer';
-    overlay.style.borderRadius = '0 0 0 5px';
+    overlay.className = 'opu-overlay';
     overlay.innerHTML = `<span class="delete-btn">❌</span><span class="resize-btn">🪄</span>`;
     if (isOriginal) overlay.innerHTML += `<span class="crop-btn">✂️</span>`;
 
-    wrapper.addEventListener('mouseover', () => (overlay.style.display = 'flex'));
-    wrapper.addEventListener('mouseout', () => (overlay.style.display = 'none'));
-
     overlay.querySelector('.delete-btn').onclick = () => {
-      const row = cell.closest('tr'); // Full row (handle + preview)
+      const row = cell.closest('tr');
       const isResized = !isOriginal && originalCell;
 
       if (isResized && originalCell) {
@@ -188,7 +200,8 @@
         }
       }
 
-      row.remove(); // Cleanly remove drag handle + preview cell
+      cell.remove();
+      if (row.cells.length <= 1) row.remove();
       updateFileInput();
     };
 
@@ -246,26 +259,22 @@
       if (e.key === 'Enter') {
         e.preventDefault();
 
+        let nw, nh;
         if (percent.test(value)) {
           const scale = parseInt(value);
-          const nw = Math.round(ow * scale / 100);
-          const nh = Math.round(oh * scale / 100);
-          resizeImage(wrapper, cell, file, nw, nh);
-          inputResize.remove();
+          nw = Math.round(ow * scale / 100);
+          nh = Math.round(oh * scale / 100);
         } else if (fixed.test(value)) {
-          const [, w, h] = value.match(fixed);
-          resizeImage(wrapper, cell, file, parseInt(w), parseInt(h));
-          inputResize.remove();
+          [, nw, nh] = value.match(fixed);
         } else if (oneSide.test(value)) {
           const [, w, h] = value.match(oneSide);
           if (w) {
-            const scale = parseInt(w) / ow;
-            resizeImage(wrapper, cell, file, parseInt(w), Math.round(oh * scale));
+            nw = parseInt(w);
+            nh = Math.round(oh * (nw / ow));
           } else {
-            const scale = parseInt(h) / oh;
-            resizeImage(wrapper, cell, file, Math.round(ow * scale), parseInt(h));
+            nh = parseInt(h);
+            nw = Math.round(ow * (nh / oh));
           }
-          inputResize.remove();
         } else {
           inputResize.value = 'ERROR';
           inputResize.style.border = '2px solid red';
@@ -277,7 +286,11 @@
             inputResize.style.animation = '';
             inputResize.value = '';
           };
+          return;
         }
+
+        resizeImage(wrapper, cell, file, parseInt(nw), parseInt(nh));
+        inputResize.remove();
       } else if (e.key === 'Escape') {
         inputResize.remove();
       }
@@ -362,8 +375,7 @@
   function updateFileInput() {
     const dt = new DataTransfer();
     const table = document.getElementById('opu-preview-table');
-    const allRows = Array.from(table.rows);
-
+    const allRows = Array.from(table?.rows || []);
     const collect = [];
 
     allRows.forEach(row => {
@@ -388,6 +400,7 @@
     });
   }
 
+  // Init logic
   window.addEventListener('load', () => {
     input.value = '';
 
@@ -396,6 +409,7 @@
       logo.innerHTML += ' <font class="podnadpic">h</font>acked';
     }
 
+    // PASTE handler
     document.addEventListener('paste', (e) => {
       const items = e.clipboardData?.items;
       const images = [];
@@ -404,24 +418,109 @@
           images.push(item.getAsFile());
         }
       }
+
       if (images.length) {
-        const dt = new DataTransfer();
-        images.forEach(file => dt.items.add(file));
-        input.files = dt.files;
-        input.dispatchEvent(new Event('change'));
         e.preventDefault();
+
+        const table = document.getElementById('opu-preview-table');
+        const dt = new DataTransfer();
+
+        if (!table) {
+          images.forEach(file => dt.items.add(file));
+          input.files = dt.files;
+          input.dispatchEvent(new Event('change'));
+        } else {
+          const existing = Array.from(input.files);
+          const combined = existing.concat(images);
+          combined.forEach(f => dt.items.add(f));
+          input.files = dt.files;
+
+          const tbody = table.querySelector('tbody');
+          images.forEach(file => {
+            const row = document.createElement('tr');
+
+            const dragCell = document.createElement('td');
+            dragCell.className = 'opu-drag-handle';
+            dragCell.textContent = '☰';
+            row.appendChild(dragCell);
+
+            const cell = document.createElement('td');
+            cell.style.position = 'relative';
+            cell.style.padding = '10px';
+            row.appendChild(cell);
+
+            tbody.appendChild(row);
+            createPreview(cell, file, true);
+          });
+
+          Sortable.create(tbody, {
+            animation: 150,
+            ghostClass: 'sortable-ghost',
+            handle: '.opu-drag-handle',
+            onEnd: updateFileInput
+          });
+        }
       }
     });
 
+    // DRAG AND DROP support
+    window.addEventListener('dragover', (e) => {
+      e.preventDefault();
+    });
 
-   // Kill initial fallback preview and size info
+    window.addEventListener('drop', (e) => {
+      e.preventDefault();
+      const items = Array.from(e.dataTransfer.files);
+      const images = items.filter(file => file.type.startsWith('image/'));
+      if (!images.length) return;
+
+      const table = document.getElementById('opu-preview-table');
+      const dt = new DataTransfer();
+
+      if (!table) {
+        images.forEach(file => dt.items.add(file));
+        input.files = dt.files;
+        input.dispatchEvent(new Event('change'));
+      } else {
+        const existing = Array.from(input.files);
+        const combined = existing.concat(images);
+        combined.forEach(f => dt.items.add(f));
+        input.files = dt.files;
+
+        const tbody = table.querySelector('tbody');
+        images.forEach(file => {
+          const row = document.createElement('tr');
+
+          const dragCell = document.createElement('td');
+          dragCell.className = 'opu-drag-handle';
+          dragCell.textContent = '☰';
+          row.appendChild(dragCell);
+
+          const cell = document.createElement('td');
+          cell.style.position = 'relative';
+          cell.style.padding = '10px';
+          row.appendChild(cell);
+
+          tbody.appendChild(row);
+          createPreview(cell, file, true);
+        });
+
+        Sortable.create(tbody, {
+          animation: 150,
+          ghostClass: 'sortable-ghost',
+          handle: '.opu-drag-handle',
+          onEnd: updateFileInput
+        });
+      }
+    });
+
+    // Cleanup fallback preview/size box
     const fallback = document.getElementById('xpc-ctrlv');
     if (fallback) fallback.remove();
 
     const dimSpan = document.getElementById('dimensions-output');
     if (dimSpan) dimSpan.remove();
 
-    // Observe and remove any future fallback
     new MutationObserver(() => {
       const fb = document.getElementById('xpc-ctrlv');
       if (fb) fb.remove();
