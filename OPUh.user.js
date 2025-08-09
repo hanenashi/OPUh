@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OPUh
 // @namespace    https://opu.peklo.biz/
-// @version      3.11
+// @version      3.10
 // @description  Image preview, crop, resize, delete, drag reorder (mobile-friendly), paste/drag add, stable order
 // @match        https://opu.peklo.biz/
 // @run-at       document-end
@@ -12,7 +12,6 @@
 // ==/UserScript==
 
 /* global Sortable, Cropper */
-
 (function () {
   'use strict';
 
@@ -142,13 +141,13 @@
       handle: '.opu-drag-handle',
       animation: 150,
       ghostClass: 'sortable-ghost',
-      // Mobile friendliness — works on Kiwi/Android
-      forceFallback: true,
+      // Mobile friendliness â€” works on Kiwi/Android
+      forceFallback: true,            // force mouse-fallback logic (more consistent across mobile)
       fallbackOnBody: true,
       fallbackTolerance: 5,
-      delayOnTouchOnly: true,
-      delay: 120,
-      touchStartThreshold: 3,
+      delayOnTouchOnly: true,         // long-press to drag on touch
+      delay: 120,                     // ms
+      touchStartThreshold: 3,         // reduce accidental drags while scrolling
       onEnd: updateFileInput
     });
   }
@@ -170,7 +169,7 @@
 
       const dragCell = document.createElement('td');
       dragCell.className = 'opu-drag-handle';
-      dragCell.textContent = '☰';
+      dragCell.textContent = 'â˜°';
       dragCell.setAttribute('aria-label', 'Drag handle');
       row.appendChild(dragCell);
 
@@ -189,7 +188,6 @@
 
   // ---- overlays / tools
   function promptResize(wrapper, cell, file) {
-    // clean any previous inputs
     document.querySelectorAll('.resize-input').forEach(el => el.remove());
 
     const wand = wrapper.querySelector('.resize-btn');
@@ -200,49 +198,24 @@
     inputResize.placeholder = '50 or 800x600 or 800x';
     inputResize.className = 'resize-input';
     Object.assign(inputResize.style, {
-      position: 'absolute',
-      left: '0',
-      top: '100%',
-      marginTop: '5px',
-      transform: 'translateX(-50%)',
-      width: '110px',
-      fontSize: '11px',
-      textAlign: 'center',
-      border: '1px solid #888',
-      outline: 'none',
-      zIndex: '100'
+      position: 'absolute', left: '0', top: '100%', marginTop: '5px',
+      transform: 'translateX(-50%)', width: '110px',
+      fontSize: '11px', textAlign: 'center',
+      border: '1px solid #888', outline: 'none', zIndex: '100'
     });
 
-    // lock overlay while editing so it can't auto-hide
-    const overlay = wrapper.querySelector('.opu-overlay');
-    if (overlay) {
-      overlay.classList.add('locked');
-      overlay.style.display = 'flex';
-    }
-
-    // mount, focus
     wand.parentElement.appendChild(inputResize);
     inputResize.focus();
 
-    function cleanup() {
-      inputResize.remove();
-      if (overlay) {
-        overlay.classList.remove('locked');
-        overlay.style.display = '';
-      }
-      document.removeEventListener('pointerdown', onDocPointerDown, true);
-    }
-
-    function onDocPointerDown(event) {
-      const withinOverlay = overlay && overlay.contains(event.target);
-      const withinInput = inputResize.contains(event.target);
-      if (!withinOverlay && !withinInput) {
-        cleanup();
+    function removeIfOutside(event) {
+      if (!inputResize.contains(event.target)) {
+        inputResize.remove();
+        document.removeEventListener('mousedown', removeIfOutside);
       }
     }
-    document.addEventListener('pointerdown', onDocPointerDown, true);
+    document.addEventListener('mousedown', removeIfOutside);
 
-    inputResize.addEventListener('keydown', (e) => {
+    inputResize.onkeydown = (e) => {
       const img = wrapper.querySelector('img');
       const ow = img.naturalWidth;
       const oh = img.naturalHeight;
@@ -288,18 +261,11 @@
         }
 
         resizeImage(wrapper, cell, file, nw, nh);
-        cleanup();
+        inputResize.remove();
       } else if (e.key === 'Escape') {
-        cleanup();
+        inputResize.remove();
       }
-    });
-
-    // in case keyboards dismiss without key events, close on blur
-    inputResize.addEventListener('blur', () => {
-      setTimeout(() => {
-        if (document.body.contains(inputResize)) cleanup();
-      }, 50);
-    });
+    };
   }
 
   function resizeImage(wrapper, cell, file, newW, newH) {
@@ -379,7 +345,7 @@
   function createOverlay(wrapper, cell, file, isOriginal, originalCell) {
     const overlay = document.createElement('div');
     overlay.className = 'opu-overlay';
-    overlay.innerHTML = `<span class="delete-btn">❌</span><span class="resize-btn">🪄</span><span class="crop-btn">✂️</span>`;
+    overlay.innerHTML = `<span class="delete-btn">âŒ</span><span class="resize-btn">ðŸª„</span><span class="crop-btn">âœ‚ï¸</span>`;
 
     // delete
     overlay.querySelector('.delete-btn').onclick = () => {
@@ -405,7 +371,7 @@
     // resize
     overlay.querySelector('.resize-btn').onclick = () => promptResize(wrapper, cell, file);
 
-    // crop — enabled for both originals and edits
+    // crop â€” now enabled for both originals and edits
     overlay.querySelector('.crop-btn').onclick = () => openCropper(file, cell, wrapper);
 
     return overlay;
@@ -444,27 +410,21 @@
     previewImg.style.maxHeight = '150px';
 
     previewImg.onload = () => {
-      info.innerHTML = `${truncateName(file.name)}<br>${previewImg.naturalWidth}×${previewImg.naturalHeight}px<br>${formatFileSize(file.size)}`;
+      info.innerHTML = `${truncateName(file.name)}<br>${previewImg.naturalWidth}Ã—${previewImg.naturalHeight}px<br>${formatFileSize(file.size)}`;
     };
 
     const overlay = createOverlay(wrapper, cell, file, isOriginal, originalCell);
 
-    // overlay show/hide helpers (no auto-hide while "locked")
-    function showOverlay() {
+    // hover show (desktop)
+    wrapper.addEventListener('mouseover', () => { overlay.style.display = 'flex'; });
+    wrapper.addEventListener('mouseout', () => { overlay.style.display = 'none'; });
+
+    // tap to show (mobile)
+    wrapper.addEventListener('touchstart', () => {
       overlay.style.display = 'flex';
-    }
-    function hideOverlay() {
-      if (!overlay.classList.contains('locked')) {
-        overlay.style.display = 'none';
-      }
-    }
-
-    // desktop hover
-    wrapper.addEventListener('mouseenter', showOverlay);
-    wrapper.addEventListener('mouseleave', hideOverlay);
-
-    // mobile tap: just show; outside tap hides (handled in promptResize via lock)
-    wrapper.addEventListener('touchstart', () => { showOverlay(); }, { passive: true });
+      // auto-hide after a moment to avoid sticking
+      setTimeout(() => { overlay.style.display = 'none'; }, 2000);
+    }, { passive: true });
 
     wrapper.appendChild(previewImg);
     wrapper.appendChild(info);
@@ -520,7 +480,7 @@
 
         const dragCell = document.createElement('td');
         dragCell.className = 'opu-drag-handle';
-        dragCell.textContent = '☰';
+        dragCell.textContent = 'â˜°';
         dragCell.setAttribute('aria-label', 'Drag handle');
         row.appendChild(dragCell);
 
@@ -581,6 +541,7 @@
     const observer = new MutationObserver(() => {
       nukeFallbackPreview();
       if (document && document.body) {
+        // Only log once per load (cheap throttle)
         if (!window.__OPUhLoggedReady) {
           window.__OPUhLoggedReady = true;
           console.log('[OPUh] DOM available and ready.');
