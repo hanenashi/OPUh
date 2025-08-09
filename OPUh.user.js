@@ -7,8 +7,8 @@
 // @run-at       document-end
 // @noframes
 // @grant        none
-// @updateURL    https://raw.githubusercontent.com/hanenashi/OPUh/refs/heads/main/OPUh.userscript.js
-// @downloadURL  https://raw.githubusercontent.com/hanenashi/OPUh/refs/heads/main/OPUh.userscript.js
+// @updateURL    https://github.com/hanenashi/OPUh/raw/refs/heads/main/OPUh.user.js
+// @downloadURL  https://github.com/hanenashi/OPUh/raw/refs/heads/main/OPUh.user.js
 // ==/UserScript==
 
 /* global Sortable, Cropper */
