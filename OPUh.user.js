@@ -141,7 +141,7 @@
       handle: '.opu-drag-handle',
       animation: 150,
       ghostClass: 'sortable-ghost',
-      // Mobile friendliness â€” works on Kiwi/Android
+      // Mobile friendliness — works on Kiwi/Android
       forceFallback: true,            // force mouse-fallback logic (more consistent across mobile)
       fallbackOnBody: true,
       fallbackTolerance: 5,
@@ -169,7 +169,7 @@
 
       const dragCell = document.createElement('td');
       dragCell.className = 'opu-drag-handle';
-      dragCell.textContent = 'â˜°';
+      dragCell.textContent = '☰';
       dragCell.setAttribute('aria-label', 'Drag handle');
       row.appendChild(dragCell);
 
@@ -345,7 +345,7 @@
   function createOverlay(wrapper, cell, file, isOriginal, originalCell) {
     const overlay = document.createElement('div');
     overlay.className = 'opu-overlay';
-    overlay.innerHTML = `<span class="delete-btn">âŒ</span><span class="resize-btn">ðŸª„</span><span class="crop-btn">âœ‚ï¸</span>`;
+    overlay.innerHTML = `<span class="delete-btn">❌</span><span class="resize-btn">🪄</span><span class="crop-btn">✂️</span>`;
 
     // delete
     overlay.querySelector('.delete-btn').onclick = () => {
@@ -371,7 +371,7 @@
     // resize
     overlay.querySelector('.resize-btn').onclick = () => promptResize(wrapper, cell, file);
 
-    // crop â€” now enabled for both originals and edits
+    // crop — now enabled for both originals and edits
     overlay.querySelector('.crop-btn').onclick = () => openCropper(file, cell, wrapper);
 
     return overlay;
@@ -410,7 +410,7 @@
     previewImg.style.maxHeight = '150px';
 
     previewImg.onload = () => {
-      info.innerHTML = `${truncateName(file.name)}<br>${previewImg.naturalWidth}Ã—${previewImg.naturalHeight}px<br>${formatFileSize(file.size)}`;
+      info.innerHTML = `${truncateName(file.name)}<br>${previewImg.naturalWidth}×${previewImg.naturalHeight}px<br>${formatFileSize(file.size)}`;
     };
 
     const overlay = createOverlay(wrapper, cell, file, isOriginal, originalCell);
@@ -480,7 +480,7 @@
 
         const dragCell = document.createElement('td');
         dragCell.className = 'opu-drag-handle';
-        dragCell.textContent = 'â˜°';
+        dragCell.textContent = '☰';
         dragCell.setAttribute('aria-label', 'Drag handle');
         row.appendChild(dragCell);
 
