@@ -1,4 +1,4 @@
-# OPUh – Okoun Picture Uploader (hacked)
+# OPUh – Okoun Picture Uploader hacked
 
 Tampermonkey userscript that enhances [Okoun Picture Uploader](https://opu.peklo.biz/) with:
 
