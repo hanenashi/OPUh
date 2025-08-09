@@ -1,17 +1,11 @@
 // ==UserScript==
 // @name         OPUh
-// @namespace    https://opu.peklo.biz/
-// @version      3.06
-// @description  Image preview, crop, resize, delete, drag reorder, smart size & filename (safer init, paste/drag support)
+// @namespace    http://opu.peklo.biz/
+// @version      3.05
+// @description  Image preview, crop, resize, delete, drag reorder, smart size & filename
 // @match        https://opu.peklo.biz/
-// @run-at       document-end
-// @noframes
 // @grant        none
-// @updateURL    https://raw.githubusercontent.com/hanenashi/OPUh/refs/heads/main/OPUh.userscript.js
-// @downloadURL  https://raw.githubusercontent.com/hanenashi/OPUh/refs/heads/main/OPUh.userscript.js
 // ==/UserScript==
-
-/* global Sortable, Cropper */
 
 (function () {
   'use strict';
@@ -145,6 +139,80 @@
     });
   }
 
+  function createPreview(cell, file, isOriginal, originalCell = null) {
+    const ext = file.name.toLowerCase().split('.').pop();
+    const isSupported = SUPPORTED_EXT.includes(ext);
+
+    const wrapper = document.createElement('div');
+    wrapper.style.position = 'relative';
+
+    const info = document.createElement('span');
+    info.style.fontSize = '12px';
+    info.style.textAlign = 'left';
+    info.style.display = 'block';
+
+    if (!isSupported) {
+      const box = document.createElement('div');
+      box.className = 'opu-unsupported-box';
+      box.textContent = `.${ext}`;
+      wrapper.appendChild(box);
+      info.textContent = `${file.name}, ${formatFileSize(file.size)}`;
+      wrapper.appendChild(info);
+      cell.appendChild(wrapper);
+      return;
+    }
+
+    const previewImg = new Image();
+    previewImg.src = URL.createObjectURL(file);
+    previewImg.style.maxWidth = '200px';
+    previewImg.style.maxHeight = '150px';
+
+    previewImg.onload = () => {
+      info.innerHTML = `${truncateName(file.name)}<br>${previewImg.naturalWidth}×${previewImg.naturalHeight}px<br>${formatFileSize(file.size)}`;
+    };
+
+    wrapper.appendChild(previewImg);
+    wrapper.appendChild(info);
+    cell.appendChild(wrapper);
+
+    // Attach overlay to image wrapper
+    const overlay = createOverlay(wrapper, cell, file, isOriginal, originalCell);
+    wrapper.addEventListener('mouseover', () => (overlay.style.display = 'flex'));
+    wrapper.addEventListener('mouseout', () => (overlay.style.display = 'none'));
+    wrapper.appendChild(overlay);
+  }
+
+  function createOverlay(wrapper, cell, file, isOriginal, originalCell) {
+    const overlay = document.createElement('div');
+    overlay.className = 'opu-overlay';
+    overlay.innerHTML = `<span class="delete-btn">❌</span><span class="resize-btn">🪄</span>`;
+    if (isOriginal) overlay.innerHTML += `<span class="crop-btn">✂️</span>`;
+
+    overlay.querySelector('.delete-btn').onclick = () => {
+      const row = cell.closest('tr');
+      const isResized = !isOriginal && originalCell;
+
+      if (isResized && originalCell) {
+        const origWrapper = originalCell.querySelector('div');
+        if (origWrapper) {
+          origWrapper.style.filter = '';
+          origWrapper.querySelectorAll('.resize-btn,.crop-btn').forEach(btn => btn.style.display = '');
+        }
+      }
+
+      cell.remove();
+      if (row.cells.length <= 1) row.remove();
+      updateFileInput();
+    };
+
+    overlay.querySelector('.resize-btn').onclick = () => promptResize(wrapper, cell, file);
+    if (isOriginal) {
+      overlay.querySelector('.crop-btn').onclick = () => openCropper(file, cell, wrapper);
+    }
+
+    return overlay;
+  }
+
   function promptResize(wrapper, cell, file) {
     document.querySelectorAll('.resize-input').forEach(el => el.remove());
 
@@ -229,6 +297,33 @@
     };
   }
 
+  function resizeImage(wrapper, cell, file, newW, newH) {
+    const canvas = document.createElement('canvas');
+    canvas.width = newW;
+    canvas.height = newH;
+    const ctx = canvas.getContext('2d');
+    const img = wrapper.querySelector('img');
+    ctx.drawImage(img, 0, 0, newW, newH);
+
+    const format = file.type.includes('png') ? 'image/png' : 'image/jpeg';
+    const quality = format === 'image/jpeg' ? 0.85 : undefined;
+
+    canvas.toBlob(blob => {
+      const resizedFile = new File([blob], file.name.replace(/\.\w+$/, '') + '_resized.jpg', { type: format });
+
+      wrapper.style.filter = 'brightness(40%)';
+      wrapper.querySelector('.resize-btn').style.display = 'none';
+      const cropBtn = wrapper.querySelector('.crop-btn');
+      if (cropBtn) cropBtn.style.display = 'none';
+
+      const row = cell.parentElement;
+      const newCell = row.insertCell(cell.cellIndex + 1);
+      newCell.style.position = 'relative';
+      newCell.style.padding = '10px';
+      createPreview(newCell, resizedFile, false, cell);
+    }, format, quality);
+  }
+
   function openCropper(file, cell, wrapper) {
     const reader = new FileReader();
     reader.onload = function (e) {
@@ -277,112 +372,6 @@
     reader.readAsDataURL(file);
   }
 
-  function resizeImage(wrapper, cell, file, newW, newH) {
-    const canvas = document.createElement('canvas');
-    canvas.width = newW;
-    canvas.height = newH;
-    const ctx = canvas.getContext('2d');
-    const img = wrapper.querySelector('img');
-    ctx.drawImage(img, 0, 0, newW, newH);
-
-    const format = file.type.includes('png') ? 'image/png' : 'image/jpeg';
-    const quality = format === 'image/jpeg' ? 0.85 : undefined;
-
-    canvas.toBlob(blob => {
-      const resizedFile = new File([blob], file.name.replace(/\.\w+$/, '') + '_resized.jpg', { type: format });
-
-      wrapper.style.filter = 'brightness(40%)';
-      wrapper.querySelector('.resize-btn').style.display = 'none';
-      const cropBtn = wrapper.querySelector('.crop-btn');
-      if (cropBtn) cropBtn.style.display = 'none';
-
-      const row = cell.parentElement;
-      const newCell = row.insertCell(cell.cellIndex + 1);
-      newCell.style.position = 'relative';
-      newCell.style.padding = '10px';
-      createPreview(newCell, resizedFile, false, cell);
-    }, format, quality);
-  }
-
-  function createPreview(cell, file, isOriginal, originalCell = null) {
-    const ext = file.name.toLowerCase().split('.').pop();
-    const isSupported = SUPPORTED_EXT.includes(ext);
-
-    const wrapper = document.createElement('div');
-    wrapper.style.position = 'relative';
-
-    const info = document.createElement('span');
-    info.style.fontSize = '12px';
-    info.style.textAlign = 'left';
-    info.style.display = 'block';
-
-    if (!isSupported) {
-      const box = document.createElement('div');
-      box.className = 'opu-unsupported-box';
-      box.textContent = `.${ext}`;
-      wrapper.appendChild(box);
-      info.textContent = `${file.name}, ${formatFileSize(file.size)}`;
-      wrapper.appendChild(info);
-      cell.appendChild(wrapper);
-      return;
-    }
-
-    const previewImg = new Image();
-    previewImg.src = URL.createObjectURL(file);
-    previewImg.style.maxWidth = '200px';
-    previewImg.style.maxHeight = '150px';
-
-    previewImg.onload = () => {
-      info.innerHTML = `${truncateName(file.name)}<br>${previewImg.naturalWidth}×${previewImg.naturalHeight}px<br>${formatFileSize(file.size)}`;
-    };
-
-    wrapper.appendChild(previewImg);
-    wrapper.appendChild(info);
-    const overlay = createOverlay(wrapper, cell, file, isOriginal, originalCell);
-    wrapper.addEventListener('mouseover', () => (overlay.style.display = 'flex'));
-    wrapper.addEventListener('mouseout', () => (overlay.style.display = 'none'));
-    wrapper.appendChild(overlay);
-    cell.appendChild(wrapper);
-  }
-
-  function createOverlay(wrapper, cell, file, isOriginal, originalCell) {
-    const overlay = document.createElement('div');
-    overlay.className = 'opu-overlay';
-    // Always allow crop (✂️), even on edited items
-    overlay.innerHTML = `<span class="delete-btn">❌</span><span class="resize-btn">🪄</span><span class="crop-btn">✂️</span>`;
-
-    overlay.querySelector('.delete-btn').onclick = () => {
-      const row = cell.closest('tr');
-      const isResized = !isOriginal && originalCell;
-
-      // If this was a derivative, un-dim and re-enable controls on its source
-      if (isResized && originalCell) {
-        const origWrapper = originalCell.querySelector('div');
-        if (origWrapper) {
-          origWrapper.style.filter = '';
-          origWrapper.querySelectorAll('.resize-btn,.crop-btn').forEach(btn => {
-            btn.style.display = '';
-          });
-        }
-      }
-
-      // Remove the current cell; if the row is empty, remove the row
-      cell.remove();
-      if (row && row.cells.length <= 1) row.remove();
-      updateFileInput();
-    };
-
-    overlay.querySelector('.resize-btn').onclick = () => {
-      promptResize(wrapper, cell, file);
-    };
-
-    overlay.querySelector('.crop-btn').onclick = () => {
-      openCropper(file, cell, wrapper);
-    };
-
-    return overlay;
-  }
-
   function updateFileInput() {
     const dt = new DataTransfer();
     const table = document.getElementById('opu-preview-table');
@@ -411,6 +400,7 @@
     });
   }
 
+  // Init logic
   window.addEventListener('load', () => {
     input.value = '';
 
@@ -419,19 +409,7 @@
       logo.innerHTML += ' <font class="podnadpic">h</font>acked';
     }
 
-    const observer = new MutationObserver(() => {
-      const fb = document.getElementById('xpc-ctrlv');
-      if (fb) fb.remove();
-
-      const dim = document.getElementById('dimensions-output');
-      if (dim) dim.remove();
-
-      if (document && document.body) {
-        console.log('[OPUh] DOM available and ready.');
-      }
-    });
-    observer.observe(document, { childList: true, subtree: true });
-
+    // PASTE handler
     document.addEventListener('paste', (e) => {
       const items = e.clipboardData?.items;
       const images = [];
@@ -443,24 +421,112 @@
 
       if (images.length) {
         e.preventDefault();
-        const existing = Array.from(input.files);
+
+        const table = document.getElementById('opu-preview-table');
         const dt = new DataTransfer();
-        existing.concat(images).forEach(f => dt.items.add(f));
-        input.files = dt.files;
-        renderPreviews(Array.from(dt.files));
+
+        if (!table) {
+          images.forEach(file => dt.items.add(file));
+          input.files = dt.files;
+          input.dispatchEvent(new Event('change'));
+        } else {
+          const existing = Array.from(input.files);
+          const combined = existing.concat(images);
+          combined.forEach(f => dt.items.add(f));
+          input.files = dt.files;
+
+          const tbody = table.querySelector('tbody');
+          images.forEach(file => {
+            const row = document.createElement('tr');
+
+            const dragCell = document.createElement('td');
+            dragCell.className = 'opu-drag-handle';
+            dragCell.textContent = '☰';
+            row.appendChild(dragCell);
+
+            const cell = document.createElement('td');
+            cell.style.position = 'relative';
+            cell.style.padding = '10px';
+            row.appendChild(cell);
+
+            tbody.appendChild(row);
+            createPreview(cell, file, true);
+          });
+
+          Sortable.create(tbody, {
+            animation: 150,
+            ghostClass: 'sortable-ghost',
+            handle: '.opu-drag-handle',
+            onEnd: updateFileInput
+          });
+        }
       }
     });
 
-    window.addEventListener('dragover', e => e.preventDefault());
-    window.addEventListener('drop', e => {
+    // DRAG AND DROP support
+    window.addEventListener('dragover', (e) => {
       e.preventDefault();
-      const images = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
-      if (!images.length) return;
-      const existing = Array.from(input.files);
-      const dt = new DataTransfer();
-      existing.concat(images).forEach(f => dt.items.add(f));
-      input.files = dt.files;
-      renderPreviews(Array.from(dt.files));
     });
+
+    window.addEventListener('drop', (e) => {
+      e.preventDefault();
+      const items = Array.from(e.dataTransfer.files);
+      const images = items.filter(file => file.type.startsWith('image/'));
+      if (!images.length) return;
+
+      const table = document.getElementById('opu-preview-table');
+      const dt = new DataTransfer();
+
+      if (!table) {
+        images.forEach(file => dt.items.add(file));
+        input.files = dt.files;
+        input.dispatchEvent(new Event('change'));
+      } else {
+        const existing = Array.from(input.files);
+        const combined = existing.concat(images);
+        combined.forEach(f => dt.items.add(f));
+        input.files = dt.files;
+
+        const tbody = table.querySelector('tbody');
+        images.forEach(file => {
+          const row = document.createElement('tr');
+
+          const dragCell = document.createElement('td');
+          dragCell.className = 'opu-drag-handle';
+          dragCell.textContent = '☰';
+          row.appendChild(dragCell);
+
+          const cell = document.createElement('td');
+          cell.style.position = 'relative';
+          cell.style.padding = '10px';
+          row.appendChild(cell);
+
+          tbody.appendChild(row);
+          createPreview(cell, file, true);
+        });
+
+        Sortable.create(tbody, {
+          animation: 150,
+          ghostClass: 'sortable-ghost',
+          handle: '.opu-drag-handle',
+          onEnd: updateFileInput
+        });
+      }
+    });
+
+    // Cleanup fallback preview/size box
+    const fallback = document.getElementById('xpc-ctrlv');
+    if (fallback) fallback.remove();
+
+    const dimSpan = document.getElementById('dimensions-output');
+    if (dimSpan) dimSpan.remove();
+
+    new MutationObserver(() => {
+      const fb = document.getElementById('xpc-ctrlv');
+      if (fb) fb.remove();
+
+      const dim = document.getElementById('dimensions-output');
+      if (dim) dim.remove();
+    }).observe(document.body, { childList: true, subtree: true });
   });
 })();
