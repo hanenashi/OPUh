@@ -13,7 +13,7 @@ Tampermonkey userscript that enhances [Okoun Picture Uploader](https://opu.peklo
 
 1. Install [Tampermonkey](https://www.tampermonkey.net/) in your browser.
 2. Click here to install OPUh:  
-   [**Install Script**](https://github.com/hanenashi/OPUh/raw/refs/heads/main/OPUh.userscript.js)
+   [**Install Script**](https://github.com/hanenashi/OPUh/raw/refs/heads/main/OPUh.user.js)
 3. Reload [Okoun Picture Uploader](https://opu.peklo.biz/).
 
 ## Usage
