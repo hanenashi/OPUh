@@ -1,12 +1,13 @@
 // ==UserScript==
 // @name         OPUh
 // @namespace    https://opu.peklo.biz/
-// @version      3.13
-// @description  Image preview, crop, resize, delete, drag reorder (mobile-friendly), paste/drag add, stable order. Mobile Paste button with portrait scaling.
+// @version      3.12
+// @description  Image preview, crop, resize, delete, drag reorder (mobile-friendly), paste/drag add, stable order. Mobile Paste button.
 // @match        https://opu.peklo.biz/
 // @run-at       document-end
 // @noframes
 // @grant        none
+// Use canonical raw host for updates (branch tip):
 // @updateURL    https://raw.githubusercontent.com/hanenashi/OPUh/main/OPUh.user.js
 // @downloadURL  https://raw.githubusercontent.com/hanenashi/OPUh/main/OPUh.user.js
 // ==/UserScript==
@@ -98,15 +99,6 @@
       -webkit-tap-highlight-color: transparent;
     }
     #opu-paste-fab:active { transform: scale(0.97); }
-
-    /* Portrait orientation: make FAB 2× bigger */
-    @media (orientation: portrait) {
-      #opu-paste-fab {
-        width: 112px;
-        height: 112px;
-        font-size: 44px;
-      }
-    }
 
     /* Toast */
     #opu-toast {
@@ -248,7 +240,9 @@
 
   // ---- overlays / tools
   function promptResize(wrapper, cell, file) {
+    // clean any previous inputs
     document.querySelectorAll('.resize-input').forEach(el => el.remove());
+
     const wand = wrapper.querySelector('.resize-btn');
     if (!wand) return;
 
@@ -270,12 +264,14 @@
       zIndex: '100'
     });
 
+    // lock overlay while editing so it can't auto-hide
     const overlay = wrapper.querySelector('.opu-overlay');
     if (overlay) {
       overlay.classList.add('locked');
       overlay.style.display = 'flex';
     }
 
+    // mount, focus
     wand.parentElement.appendChild(inputResize);
     inputResize.focus();
 
@@ -342,6 +338,7 @@
       }
     });
 
+    // in case keyboards dismiss without key events, close on blur
     inputResize.addEventListener('blur', () => {
       setTimeout(() => {
         if (document.body.contains(inputResize)) cleanup();
@@ -365,6 +362,7 @@
       const outName = baseNamePlus(file, '_resized', outExt);
       const resizedFile = new File([blob], outName, { type: outType });
 
+      // dim source & hide its buttons
       wrapper.style.filter = 'brightness(40%)';
       const rb = wrapper.querySelector('.resize-btn'); if (rb) rb.style.display = 'none';
       const cb = wrapper.querySelector('.crop-btn'); if (cb) cb.style.display = 'none';
@@ -403,6 +401,7 @@
           const outName = baseNamePlus(file, '_cropped', '.jpg');
           const croppedFile = new File([blob], outName, { type: 'image/jpeg' });
 
+          // dim source & hide its buttons
           wrapper.style.filter = 'brightness(40%)';
           const rb = wrapper.querySelector('.resize-btn'); if (rb) rb.style.display = 'none';
           const cb = wrapper.querySelector('.crop-btn'); if (cb) cb.style.display = 'none';
@@ -426,9 +425,11 @@
     overlay.className = 'opu-overlay';
     overlay.innerHTML = `<span class="delete-btn">❌</span><span class="resize-btn">🪄</span><span class="crop-btn">✂️</span>`;
 
+    // delete
     overlay.querySelector('.delete-btn').onclick = () => {
       const row = cell.closest('tr');
       const isEdit = !isOriginal && originalCell;
+
       if (isEdit && originalCell) {
         const origWrapper = originalCell.querySelector('div');
         if (origWrapper) {
@@ -436,22 +437,32 @@
           origWrapper.querySelectorAll('.resize-btn,.crop-btn').forEach(btn => btn.style.display = '');
         }
       }
+
+      // remove only this cell; if row becomes empty (only handle left), remove row
       cell.remove();
       const nonHandleCells = Array.from(row.cells).slice(1);
       if (nonHandleCells.length === 0) row.remove();
+
       updateFileInput();
     };
 
+    // resize
     overlay.querySelector('.resize-btn').onclick = () => promptResize(wrapper, cell, file);
+
+    // crop — enabled for both originals and edits
     overlay.querySelector('.crop-btn').onclick = () => openCropper(file, cell, wrapper);
+
     return overlay;
   }
 
   function createPreview(cell, file, isOriginal, originalCell = null) {
     const ext = file.name.toLowerCase().split('.').pop();
     const isSupported = SUPPORTED_EXT.includes(ext);
+
     const wrapper = document.createElement('div');
     wrapper.style.position = 'relative';
+
+    // store actual File for stable ordering
     wrapper._file = file;
     wrapper.dataset.filename = file.name;
 
@@ -468,7 +479,8 @@
       info.textContent = `${file.name}, ${formatFileSize(file.size)}`;
       wrapper.appendChild(info);
       cell.appendChild(wrapper);
-         }
+      return;
+    }
 
     const previewImg = new Image();
     previewImg.src = URL.createObjectURL(file);
@@ -525,6 +537,7 @@
     try {
       const t = (await navigator.clipboard.readText()).trim();
       if (!/^https?:\/\//i.test(t)) return null;
+      // quick extension hint
       const looksImage = /\.(png|jpe?g|webp|gif|bmp|svg)(\?|#|$)/i.test(t);
       const resp = await fetch(t, { mode: 'cors' });
       if (!resp.ok) return null;
@@ -561,10 +574,7 @@
   function updateFileInput() {
     const dt = new DataTransfer();
     const table = document.getElementById('opu-preview-table');
-    if (!table) {
-      input.files = dt.files;
-      return;
-    }
+    if (!table) { input.files = dt.files; return; }
 
     // left-to-right within row, row-by-row; skip dimmed (source of an edit)
     const rows = Array.from(table.querySelectorAll('tbody tr'));
@@ -662,7 +672,7 @@
 
     nukeFallbackPreview();
 
-    // FAB paste button (doubles in portrait via CSS)
+    // FAB paste button
     const fab = document.createElement('div');
     fab.id = 'opu-paste-fab';
     fab.title = 'Paste from clipboard';
@@ -684,4 +694,3 @@
     observer.observe(document.documentElement || document, { childList: true, subtree: true });
   });
 })();
-
