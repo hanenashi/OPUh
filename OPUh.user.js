@@ -1,14 +1,15 @@
 // ==UserScript==
 // @name         OPUh
 // @namespace    https://opu.peklo.biz/
-// @version      3.11
-// @description  Image preview, crop, resize, delete, drag reorder (mobile-friendly), paste/drag add, stable order
+// @version      3.12
+// @description  Image preview, crop, resize, delete, drag reorder (mobile-friendly), paste/drag add, stable order. Mobile Paste button.
 // @match        https://opu.peklo.biz/
 // @run-at       document-end
 // @noframes
 // @grant        none
-// @updateURL    https://github.com/hanenashi/OPUh/raw/refs/heads/main/OPUh.user.js
-// @downloadURL  https://github.com/hanenashi/OPUh/raw/refs/heads/main/OPUh.user.js
+// Use canonical raw host for updates (branch tip):
+// @updateURL    https://raw.githubusercontent.com/hanenashi/OPUh/main/OPUh.user.js
+// @downloadURL  https://raw.githubusercontent.com/hanenashi/OPUh/main/OPUh.user.js
 // ==/UserScript==
 
 /* global Sortable, Cropper */
@@ -18,7 +19,7 @@
   const SUPPORTED_EXT = ['jpg', 'jpeg', 'png', 'webp', 'bmp'];
   const input = document.querySelector('#obrazek');
 
-  // ---- styles (incl. mobile DnD handle friendliness)
+  // ---- styles (incl. mobile DnD handle friendliness + FAB + toast)
   const style = document.createElement('style');
   style.textContent = `
     @keyframes flash { 0%,100%{background:transparent;} 50%{background:#ffdddd;} }
@@ -75,6 +76,46 @@
       border-radius: 0 0 0 5px;
       z-index: 5;
     }
+
+    /* Floating Paste Button (FAB) */
+    #opu-paste-fab {
+      position: fixed;
+      bottom: 16px;
+      right: 16px;
+      z-index: 99999;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      background: #222;
+      color: #fff;
+      font-size: 22px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.35);
+      border: 1px solid #444;
+      cursor: pointer;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    #opu-paste-fab:active { transform: scale(0.97); }
+
+    /* Toast */
+    #opu-toast {
+      position: fixed;
+      bottom: 86px;
+      right: 16px;
+      background: rgba(20,20,20,0.95);
+      color: #fff;
+      padding: 8px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      z-index: 99999;
+      display: none;
+      max-width: 70vw;
+      word-break: break-word;
+      border: 1px solid #444;
+    }
   `;
   document.head.appendChild(style);
 
@@ -112,6 +153,19 @@
     return `${base}${suffix}${ext}`;
   }
 
+  function toast(msg, ms = 2200) {
+    let t = document.getElementById('opu-toast');
+    if (!t) {
+      t = document.createElement('div');
+      t.id = 'opu-toast';
+      document.body.appendChild(t);
+    }
+    t.textContent = msg;
+    t.style.display = 'block';
+    clearTimeout(t._timer);
+    t._timer = setTimeout(() => { t.style.display = 'none'; }, ms);
+  }
+
   // ---- clean any fallback preview from OPU
   function nukeFallbackPreview() {
     const fb = document.getElementById('xpc-ctrlv');
@@ -133,7 +187,6 @@
 
   function createOrUpdateSortable(tbody) {
     if (!window.Sortable) return;
-    // Destroy old instance if any
     if (tbody._sortable && typeof tbody._sortable.destroy === 'function') {
       tbody._sortable.destroy();
     }
@@ -141,7 +194,6 @@
       handle: '.opu-drag-handle',
       animation: 150,
       ghostClass: 'sortable-ghost',
-      // Mobile friendliness — works on Kiwi/Android
       forceFallback: true,
       fallbackOnBody: true,
       fallbackTolerance: 5,
@@ -235,9 +287,7 @@
     function onDocPointerDown(event) {
       const withinOverlay = overlay && overlay.contains(event.target);
       const withinInput = inputResize.contains(event.target);
-      if (!withinOverlay && !withinInput) {
-        cleanup();
-      }
+      if (!withinOverlay && !withinInput) cleanup();
     }
     document.addEventListener('pointerdown', onDocPointerDown, true);
 
@@ -265,13 +315,8 @@
           nh = parseInt(m[2], 10);
         } else if (oneSide.test(value)) {
           const m = value.match(oneSide);
-          if (m[1]) {
-            nw = parseInt(m[1], 10);
-            nh = Math.round(oh * (nw / ow));
-          } else {
-            nh = parseInt(m[2], 10);
-            nw = Math.round(ow * (nh / oh));
-          }
+          if (m[1]) { nw = parseInt(m[1], 10); nh = Math.round(oh * (nw / ow)); }
+          else { nh = parseInt(m[2], 10); nw = Math.round(ow * (nh / oh)); }
         } else {
           inputResize.value = 'ERROR';
           inputResize.style.border = '2px solid red';
@@ -449,14 +494,8 @@
     const overlay = createOverlay(wrapper, cell, file, isOriginal, originalCell);
 
     // overlay show/hide helpers (no auto-hide while "locked")
-    function showOverlay() {
-      overlay.style.display = 'flex';
-    }
-    function hideOverlay() {
-      if (!overlay.classList.contains('locked')) {
-        overlay.style.display = 'none';
-      }
-    }
+    function showOverlay() { overlay.style.display = 'flex'; }
+    function hideOverlay() { if (!overlay.classList.contains('locked')) overlay.style.display = 'none'; }
 
     // desktop hover
     wrapper.addEventListener('mouseenter', showOverlay);
@@ -471,14 +510,71 @@
     cell.appendChild(wrapper);
   }
 
+  // ---- Clipboard helpers for mobile FAB
+  async function tryClipboardReadImages() {
+    if (!(navigator.clipboard && navigator.clipboard.read)) return [];
+    try {
+      const items = await navigator.clipboard.read();
+      const files = [];
+      for (const item of items) {
+        for (const type of item.types) {
+          if (type.startsWith('image/')) {
+            const blob = await item.getType(type);
+            const ext = (type.split('/')[1] || 'png').split(';')[0];
+            files.push(new File([blob], `pasted_${Date.now()}.${ext}`, { type }));
+          }
+        }
+      }
+      return files;
+    } catch (e) {
+      console.debug('[OPUh] clipboard.read() failed:', e);
+      return [];
+    }
+  }
+
+  async function tryClipboardReadImageURL() {
+    if (!(navigator.clipboard && navigator.clipboard.readText)) return null;
+    try {
+      const t = (await navigator.clipboard.readText()).trim();
+      if (!/^https?:\/\//i.test(t)) return null;
+      // quick extension hint
+      const looksImage = /\.(png|jpe?g|webp|gif|bmp|svg)(\?|#|$)/i.test(t);
+      const resp = await fetch(t, { mode: 'cors' });
+      if (!resp.ok) return null;
+      const ct = resp.headers.get('content-type') || '';
+      if (!ct.startsWith('image/') && !looksImage) return null;
+      const blob = await resp.blob();
+      const ext = (ct.startsWith('image/') ? ct.split('/')[1] : (t.split('.').pop() || 'png')).split(';')[0];
+      const file = new File([blob], `pasted_${Date.now()}.${ext}`, { type: blob.type || 'image/*' });
+      return file;
+    } catch (e) {
+      console.debug('[OPUh] fetch clipboard URL failed:', e);
+      return null;
+    }
+  }
+
+  async function handleMobilePaste() {
+    // Must run in a user gesture (button tap)
+    let images = await tryClipboardReadImages();
+    if (images.length) {
+      addImages(images);
+      toast(`Pasted ${images.length} image${images.length > 1 ? 's' : ''} from clipboard`);
+      return;
+    }
+    const fileFromURL = await tryClipboardReadImageURL();
+    if (fileFromURL) {
+      addImages([fileFromURL]);
+      toast('Pasted image from clipboard link');
+      return;
+    }
+    toast('Clipboard has no image (or browser blocked access).');
+  }
+
   // ---- rebuild input files in exact DOM order (no async)
   function updateFileInput() {
     const dt = new DataTransfer();
     const table = document.getElementById('opu-preview-table');
-    if (!table) {
-      input.files = dt.files;
-      return;
-    }
+    if (!table) { input.files = dt.files; return; }
 
     // left-to-right within row, row-by-row; skip dimmed (source of an edit)
     const rows = Array.from(table.querySelectorAll('tbody tr'));
@@ -541,7 +637,7 @@
     input.addEventListener('change', () => renderPreviews(Array.from(input.files)));
   }
 
-  // PASTE images
+  // PASTE images via keyboard (desktop)
   document.addEventListener('paste', (e) => {
     const items = e.clipboardData?.items || [];
     const images = [];
@@ -575,6 +671,15 @@
     }
 
     nukeFallbackPreview();
+
+    // FAB paste button
+    const fab = document.createElement('div');
+    fab.id = 'opu-paste-fab';
+    fab.title = 'Paste from clipboard';
+    fab.setAttribute('aria-label', 'Paste from clipboard');
+    fab.textContent = '📋';
+    fab.addEventListener('click', handleMobilePaste, { passive: true });
+    document.body.appendChild(fab);
 
     // Keep nuking any late-added fallback junk and log DOM readiness (for Tigo)
     const observer = new MutationObserver(() => {
