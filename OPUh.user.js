@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         OPUh
 // @namespace    https://opu.peklo.biz/
-// @version      3.13.8
-// @description  Image preview, crop, resize, delete, drag reorder (mobile-friendly). Multi-URL paste with circular FAB progress, draggable FAB (saved pos), desktop-safe clicks.
+// @version      3.13.9
+// @description  Image preview, crop, resize, delete, drag reorder. Multi-URL paste with circular FAB progress. Simplified draggable FAB (saved position), click-safe on desktop.
 // @match        https://opu.peklo.biz/
 // @run-at       document-end
 // @noframes
@@ -51,12 +51,12 @@
     }
     .opu-overlay .opu-btn { display: inline-block; padding: 0 2px; line-height: 1; }
 
-    /* --- Circular FAB with progress ring (stable on mobile) --- */
+    /* --- Circular FAB with progress ring --- */
     #opu-paste-fab-wrap {
       position: fixed; bottom: 16px; right: 16px; z-index: 99999;
       display: grid; place-items: center;
-      --ring-size: 64px;           /* outer size */
-      --pad: 8px;                  /* ring thickness */
+      --ring-size: 65px;           /* outer size */
+      --pad: 9px;                  /* ring thickness */
       --pct: 0deg;                 /* progress angle */
       --ring-color: #5aa657;
       --track-color: #2a2a2a;
@@ -87,7 +87,7 @@
       font-size: 22px; line-height: 1; cursor: inherit; user-select: none;
       -webkit-tap-highlight-color: transparent; text-align: center; padding: 6px;
       position: relative; z-index: 1;
-      touch-action: none;          /* no pan/zoom while starting drag */
+      touch-action: none;
     }
     #opu-paste-fab:active { transform: scale(0.97); }
 
@@ -612,7 +612,7 @@
     }
   }
 
-  // --- draggable FAB (mobile-stable; early capture; saves position)
+  // --- position helpers for FAB
   const FAB_POS_KEY = 'OPUh.fab.pos.v1';
   function clamp(n, min, max) { return Math.max(min, Math.min(max, n)); }
   function applyFabPos(wrap, pos) {
@@ -640,17 +640,17 @@
     const pos = { left: Math.round(rect.left), top: Math.round(rect.top) };
     try { localStorage.setItem(FAB_POS_KEY, JSON.stringify(pos)); } catch {}
   }
+
+  // --- simplified draggable FAB (uniform threshold; window listeners; click-safe)
   function makeFabDraggable(wrap, fab) {
-    const DRAG_THRESHOLD = 6;    // px movement to trigger drag
-    const HOLD_DELAY     = 140;  // ms long-press for touch/pen
+    const DRAG_THRESHOLD = 8; // px to start dragging
 
-    let pressing = false, active = false;
-    let sx = 0, sy = 0, startLeft = 0, startTop = 0;
-    let pressTimer = null, activePointerId = null;
+    let isDown = false, isDragging = false, suppressClick = false;
+    let id = null, sx = 0, sy = 0, startLeft = 0, startTop = 0;
 
-    function beginDrag() {
-      if (active) return;
-      active = true;
+    function startDrag() {
+      if (isDragging) return;
+      isDragging = true;
       wrap.classList.add('dragging');
       const rect = wrap.getBoundingClientRect();
       startLeft = rect.left; startTop = rect.top;
@@ -660,48 +660,35 @@
       wrap.style.bottom = '';
     }
 
-    function endDrag() {
-      if (!active) return;
-      active = false;
+    function stopDrag() {
+      if (!isDragging) return;
+      isDragging = false;
       wrap.classList.remove('dragging');
       saveFabPos(wrap);
-      wrap._justDragged = true;
-      setTimeout(() => { wrap._justDragged = false; }, 200);
+      suppressClick = true;
+      setTimeout(() => { suppressClick = false; }, 150);
     }
 
     const onDown = (e) => {
-      pressing = true; active = false;
+      isDown = true; isDragging = false;
+      id = e.pointerId ?? null;
       sx = e.clientX; sy = e.clientY;
-
-      // Early pointer capture so moves keep coming even if finger leaves
-      activePointerId = (e.pointerId != null) ? e.pointerId : null;
-      if (activePointerId != null && wrap.setPointerCapture) {
-        try { wrap.setPointerCapture(activePointerId); } catch {}
-      }
-
-      clearTimeout(pressTimer);
-      const isMouse = e.pointerType === 'mouse';
-      pressTimer = setTimeout(() => {
-        if (!isMouse && pressing && !active) beginDrag();
-      }, HOLD_DELAY);
-      // no preventDefault here (keeps clicks alive)
+      // do NOT preventDefault here: preserves normal click behavior
     };
 
     const onMove = (e) => {
-      if (!pressing) return;
+      if (!isDown) return;
+      if (id != null && e.pointerId !== id) return;
+
       const dx = e.clientX - sx;
       const dy = e.clientY - sy;
 
-      if (!active) {
-        if (Math.hypot(dx, dy) > DRAG_THRESHOLD) {
-          clearTimeout(pressTimer);
-          beginDrag();
-        } else {
-          return; // still click candidate
-        }
+      if (!isDragging) {
+        if (Math.hypot(dx, dy) > DRAG_THRESHOLD) startDrag();
+        else return;
       }
 
-      e.preventDefault(); // stop page scroll during drag
+      e.preventDefault();
       const vw = window.innerWidth, vh = window.innerHeight;
       const rect = wrap.getBoundingClientRect();
       let left = startLeft + dx;
@@ -712,24 +699,20 @@
       wrap.style.top  = `${top}px`;
     };
 
-    const onUp = () => {
-      pressing = false;
-      clearTimeout(pressTimer);
-      if (active) endDrag();
-      if (activePointerId != null && wrap.releasePointerCapture) {
-        try { wrap.releasePointerCapture(activePointerId); } catch {}
-      }
-      activePointerId = null;
+    const onUp = (e) => {
+      if (id != null && e.pointerId !== id) return;
+      if (isDragging) stopDrag();
+      isDown = false; id = null;
     };
 
     wrap.addEventListener('pointerdown', onDown, { passive: true });
-    wrap.addEventListener('pointermove', onMove, { passive: false });
-    wrap.addEventListener('pointerup', onUp, { passive: false });
-    wrap.addEventListener('pointercancel', onUp, { passive: false });
-    wrap.addEventListener('contextmenu', e => e.preventDefault()); // kill long-press menu
+    window.addEventListener('pointermove', onMove, { passive: false });
+    window.addEventListener('pointerup', onUp, { passive: false });
+    window.addEventListener('pointercancel', onUp, { passive: false });
+    wrap.addEventListener('contextmenu', e => e.preventDefault());
 
     fab.addEventListener('click', (e) => {
-      if (wrap._justDragged) { e.stopPropagation(); e.preventDefault(); }
+      if (suppressClick) { e.stopPropagation(); e.preventDefault(); }
     }, true);
 
     window.addEventListener('resize', () => {
@@ -784,7 +767,7 @@
   // Mobile FAB click handler
   async function handleMobilePaste() {
     const { wrap } = getFabParts();
-    if (wrap?._justDragged) return; // ignore click right after drag
+    if (wrap?._justDragged) return; // (kept, though simplified suppressClick handles most)
 
     // image blobs first
     let images = [];
