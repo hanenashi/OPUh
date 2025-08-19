@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OPUh
 // @namespace    https://opu.peklo.biz/
-// @version      3.13.6
+// @version      3.13.7
 // @description  Image preview, crop, resize, delete, drag reorder (mobile-friendly). Multi-URL paste with circular FAB progress, draggable FAB with saved position.
 // @match        https://opu.peklo.biz/
 // @run-at       document-end
