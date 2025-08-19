@@ -614,99 +614,141 @@
     }
   }
 
-  // ---- draggable FAB (saves position)
-  const FAB_POS_KEY = 'OPUh.fab.pos.v1';
-  function clamp(n, min, max) { return Math.max(min, Math.min(max, n)); }
-  function applyFabPos(wrap, pos) {
+// --- draggable FAB (click-friendly; saves position) ---
+const FAB_POS_KEY = 'OPUh.fab.pos.v1';
+function clamp(n, min, max) { return Math.max(min, Math.min(max, n)); }
+function applyFabPos(wrap, pos) {
+  const rect = wrap.getBoundingClientRect();
+  const vw = window.innerWidth, vh = window.innerHeight;
+  const left = clamp(pos.left, 4, vw - rect.width - 4);
+  const top  = clamp(pos.top,  4, vh - rect.height - 4);
+  wrap.style.left = `${left}px`;
+  wrap.style.top = `${top}px`;
+  wrap.style.right = '';
+  wrap.style.bottom = '';
+}
+function loadFabPos(wrap) {
+  try {
+    const raw = localStorage.getItem(FAB_POS_KEY);
+    if (!raw) return;
+    const pos = JSON.parse(raw);
+    if (pos && typeof pos.left === 'number' && typeof pos.top === 'number') {
+      applyFabPos(wrap, pos);
+    }
+  } catch {}
+}
+function saveFabPos(wrap) {
+  const rect = wrap.getBoundingClientRect();
+  const pos = { left: Math.round(rect.left), top: Math.round(rect.top) };
+  try { localStorage.setItem(FAB_POS_KEY, JSON.stringify(pos)); } catch {}
+}
+
+function makeFabDraggable(wrap, fab) {
+  // Clicks are clicks unless we move > threshold or hold long enough.
+  const DRAG_THRESHOLD = 6;   // px movement to trigger drag
+  const HOLD_DELAY     = 140; // ms long-press to trigger drag
+  let pressing = false, active = false, moved = false;
+  let sx = 0, sy = 0, startLeft = 0, startTop = 0;
+  let pressTimer = null;
+
+  function beginDrag(e) {
+    if (active) return;
+    active = true;
+    wrap.classList.add('dragging');
     const rect = wrap.getBoundingClientRect();
-    const vw = window.innerWidth, vh = window.innerHeight;
-    const left = clamp(pos.left, 4, vw - rect.width - 4);
-    const top  = clamp(pos.top,  4, vh - rect.height - 4);
-    wrap.style.left = `${left}px`;
-    wrap.style.top = `${top}px`;
+    startLeft = rect.left; startTop = rect.top;
+    wrap.style.left = `${startLeft}px`;
+    wrap.style.top  = `${startTop}px`;
     wrap.style.right = '';
     wrap.style.bottom = '';
+    // capture only once we actually start dragging
+    if (e.pointerId != null && wrap.setPointerCapture) {
+      try { wrap.setPointerCapture(e.pointerId); } catch {}
+    }
   }
-  function loadFabPos(wrap) {
-    try {
-      const raw = localStorage.getItem(FAB_POS_KEY);
-      if (!raw) return;
-      const pos = JSON.parse(raw);
-      if (pos && typeof pos.left === 'number' && typeof pos.top === 'number') {
-        applyFabPos(wrap, pos);
+
+  function endDrag(e) {
+    if (!active) return;
+    active = false;
+    wrap.classList.remove('dragging');
+    saveFabPos(wrap);
+    // suppress the click that follows a drag
+    wrap._justDragged = true;
+    setTimeout(() => { wrap._justDragged = false; }, 200);
+    if (e?.pointerId != null && wrap.releasePointerCapture) {
+      try { wrap.releasePointerCapture(e.pointerId); } catch {}
+    }
+  }
+
+  const onDown = (e) => {
+    const ev = e.touches ? e.touches[0] : e;
+    pressing = true; moved = false; active = false;
+    sx = ev.clientX; sy = ev.clientY;
+
+    // set a long-press timer; if it fires, we start dragging even without motion
+    clearTimeout(pressTimer);
+    pressTimer = setTimeout(() => {
+      if (pressing && !active) beginDrag(e);
+    }, HOLD_DELAY);
+    // IMPORTANT: don't preventDefault here so clicks still work on desktop
+  };
+
+  const onMove = (e) => {
+    if (!pressing) return;
+    const ev = e.touches ? e.touches[0] : e;
+    const dx = ev.clientX - sx;
+    const dy = ev.clientY - sy;
+    if (!active) {
+      const travel = Math.hypot(dx, dy);
+      if (travel > DRAG_THRESHOLD) { // crossed threshold -> start drag
+        clearTimeout(pressTimer);
+        beginDrag(e);
+      } else {
+        return; // still a click candidate
       }
-    } catch {}
-  }
-  function saveFabPos(wrap) {
+    }
+    // dragging
+    e.preventDefault(); // stop text selection/scroll while dragging
+    moved = true;
+
+    const vw = window.innerWidth, vh = window.innerHeight;
     const rect = wrap.getBoundingClientRect();
-    const pos = { left: Math.round(rect.left), top: Math.round(rect.top) };
-    try { localStorage.setItem(FAB_POS_KEY, JSON.stringify(pos)); } catch {}
-  }
-  function makeFabDraggable(wrap, fab) {
-    let active = false, moved = false, sx = 0, sy = 0, startLeft = 0, startTop = 0;
-    const onDown = (e) => {
-      // allow starting drag from either wrap or button
-      const ev = e.touches ? e.touches[0] : e;
-      const rect = wrap.getBoundingClientRect();
-      sx = ev.clientX; sy = ev.clientY;
-      startLeft = rect.left; startTop = rect.top;
-      active = true; moved = false;
-      wrap.classList.add('dragging');
-      wrap.setPointerCapture?.(e.pointerId ?? undefined);
-      // convert bottom/right to left/top before moving
-      wrap.style.left = `${startLeft}px`;
-      wrap.style.top = `${startTop}px`;
-      wrap.style.right = '';
-      wrap.style.bottom = '';
-      e.preventDefault();
-    };
-    const onMove = (e) => {
-      if (!active) return;
-      const ev = e.touches ? e.touches[0] : e;
-      const dx = ev.clientX - sx;
-      const dy = ev.clientY - sy;
-      if (Math.abs(dx) + Math.abs(dy) > 3) moved = true;
-      const vw = window.innerWidth, vh = window.innerHeight;
-      const rect = wrap.getBoundingClientRect();
-      let left = startLeft + dx;
-      let top  = startTop + dy;
-      left = clamp(left, 4, vw - rect.width - 4);
-      top  = clamp(top,  4, vh - rect.height - 4);
-      wrap.style.left = `${left}px`;
-      wrap.style.top = `${top}px`;
-      e.preventDefault();
-    };
-    const onUp = (e) => {
-      if (!active) return;
-      active = false;
-      wrap.classList.remove('dragging');
-      if (moved) {
-        saveFabPos(wrap);
-        // prevent accidental click after drag
-        wrap._justDragged = true;
-        setTimeout(() => { wrap._justDragged = false; }, 200);
-      }
-      wrap.releasePointerCapture?.(e.pointerId ?? undefined);
-      e.preventDefault();
-    };
-    // Pointer + touch + mouse (for Safari)
-    wrap.addEventListener('pointerdown', onDown);
-    wrap.addEventListener('pointermove', onMove);
-    wrap.addEventListener('pointerup', onUp);
-    wrap.addEventListener('touchstart', onDown, { passive: false });
-    wrap.addEventListener('touchmove', onMove, { passive: false });
-    wrap.addEventListener('touchend', onUp, { passive: false });
-    window.addEventListener('resize', () => {
-      // clamp to viewport on resize/orientation change
-      const rect = wrap.getBoundingClientRect();
-      applyFabPos(wrap, { left: rect.left, top: rect.top });
-      saveFabPos(wrap);
-    });
-    // guard the actual click handler
-    fab.addEventListener('click', (e) => {
-      if (wrap._justDragged) { e.stopPropagation(); e.preventDefault(); }
-    }, true);
-  }
+    let left = startLeft + dx;
+    let top  = startTop + dy;
+    left = clamp(left, 4, vw - rect.width - 4);
+    top  = clamp(top,  4, vh - rect.height - 4);
+    wrap.style.left = `${left}px`;
+    wrap.style.top  = `${top}px`;
+  };
+
+  const onUp = (e) => {
+    pressing = false;
+    clearTimeout(pressTimer);
+    if (active) {
+      e.preventDefault(); // prevent the "end of drag" turning into a click
+      endDrag(e);
+    }
+  };
+
+  // Use pointer events when available; they cover mouse + touch
+  wrap.addEventListener('pointerdown', onDown, { passive: true });
+  wrap.addEventListener('pointermove', onMove, { passive: false });
+  wrap.addEventListener('pointerup', onUp, { passive: false });
+  wrap.addEventListener('pointercancel', onUp, { passive: false });
+  window.addEventListener('blur', onUp); // safety
+
+  // Guard the paste click: if we just dragged, drop the click
+  fab.addEventListener('click', (e) => {
+    if (wrap._justDragged) { e.stopPropagation(); e.preventDefault(); }
+  }, true);
+
+  // Keep position sane on resize/orientation
+  window.addEventListener('resize', () => {
+    const rect = wrap.getBoundingClientRect();
+    applyFabPos(wrap, { left: rect.left, top: rect.top });
+    saveFabPos(wrap);
+  });
+}
 
   // ---- events
   if (input) {
