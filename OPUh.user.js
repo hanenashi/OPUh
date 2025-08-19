@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         OPUh
 // @namespace    https://opu.peklo.biz/
-// @version      3.13
-// @description  Image preview, crop, resize, delete, drag reorder (mobile-friendly), paste/drag add, stable order. Mobile Paste button with portrait scaling.
+// @version      3.13.6
+// @description  Image preview, crop, resize, delete, drag reorder (mobile-friendly). Multi-URL paste with circular FAB progress, draggable FAB with saved position.
 // @match        https://opu.peklo.biz/
 // @run-at       document-end
 // @noframes
@@ -18,111 +18,97 @@
   const SUPPORTED_EXT = ['jpg', 'jpeg', 'png', 'webp', 'bmp'];
   const input = document.querySelector('#obrazek');
 
-  // ---- styles (incl. mobile DnD handle friendliness + FAB + toast)
+  // ---- styles (incl. mobile DnD handle friendliness + FAB ring + toast)
   const style = document.createElement('style');
   style.textContent = `
     @keyframes flash { 0%,100%{background:transparent;} 50%{background:#ffdddd;} }
     .sortable-ghost { opacity: 0.5; background: #333 !important; }
 
     .opu-drag-handle {
-      font-size: 18px;
-      text-align: center;
-      vertical-align: middle;
-      width: 28px;
-      padding: 6px 8px;
-      cursor: grab;
-      user-select: none;
-      -ms-touch-action: none;
-      touch-action: none;
-      color: #888;
+      font-size: 18px; text-align: center; vertical-align: middle;
+      width: 28px; padding: 6px 8px; cursor: grab; user-select: none;
+      -ms-touch-action: none; touch-action: none; color: #888;
     }
 
     .opu-unsupported-box {
-      width: 200px;
-      height: 150px;
-      background-color: #444;
-      color: #fff;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: bold;
-      font-size: 16px;
+      width: 200px; height: 150px; background-color: #444; color: #fff;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: bold; font-size: 16px;
     }
 
     #opu-crop-modal {
-      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-      background: rgba(0,0,0,0.85); display: flex;
-      align-items: center; justify-content: center; z-index: 9999;
-      backdrop-filter: blur(3px);
+      position: fixed; inset: 0; background: rgba(0,0,0,0.85);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 9999; backdrop-filter: blur(3px);
     }
-    #opu-crop-content {
-      background: #222; padding: 10px; border-radius: 6px;
-      box-shadow: 0 0 10px #000; position: relative;
-    }
+    #opu-crop-content { background: #222; padding: 10px; border-radius: 6px; box-shadow: 0 0 10px #000; position: relative; }
     #opu-crop-img { max-width: 80vw; max-height: 70vh; }
     #opu-crop-btns { display: flex; justify-content: space-between; margin-top: 10px; }
 
     .opu-overlay {
-      position: absolute;
-      top: 0;
-      right: 0;
-      background-color: rgba(0,0,0,0.8);
-      color: #fff;
-      display: none;
-      gap: 5px;
-      padding: 3px 5px;
-      cursor: pointer;
-      border-radius: 0 0 0 5px;
-      z-index: 5;
+      position: absolute; top: 0; right: 0; background: rgba(0,0,0,0.8); color: #fff;
+      display: none; gap: 5px; padding: 3px 5px; cursor: pointer; border-radius: 0 0 0 5px; z-index: 5;
     }
+    .opu-overlay .opu-btn { display: inline-block; padding: 0 2px; line-height: 1; }
 
-    /* Floating Paste Button (FAB) */
-    #opu-paste-fab {
-      position: fixed;
-      bottom: 16px;
-      right: 16px;
-      z-index: 99999;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 56px;
-      height: 56px;
+    /* --- Circular FAB with progress ring --- */
+    #opu-paste-fab-wrap {
+      position: fixed; bottom: 16px; right: 16px; z-index: 99999;
+      display: grid; place-items: center;
+      --ring-size: 64px;           /* outer size */
+      --pad: 9px;                  /* ring thickness (requested) */
+      --pct: 0deg;                 /* progress angle */
+      --ring-color: #5aa657;
+      --track-color: #2a2a2a;
+      width: var(--ring-size); height: var(--ring-size);
       border-radius: 50%;
-      background: #222;
-      color: #fff;
-      font-size: 22px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.35);
-      border: 1px solid #444;
-      cursor: pointer;
-      user-select: none;
-      -webkit-tap-highlight-color: transparent;
+      cursor: grab; user-select: none;
+    }
+    /* ring (track + progress) behind the button */
+    #opu-paste-fab-wrap::before {
+      content: ""; position: absolute; inset: 0; border-radius: 50%;
+      background: conic-gradient(var(--ring-color) var(--pct), var(--track-color) 0);
+      -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - var(--pad)), #000 0);
+              mask: radial-gradient(farthest-side, transparent calc(100% - var(--pad)), #000 0);
+      pointer-events: none;
+      transition: background .15s linear;
+    }
+    /* when NOT in progress, hide the green arc (track only) */
+    #opu-paste-fab-wrap:not(.in-progress)::before {
+      background: conic-gradient(var(--track-color) 360deg, var(--track-color) 0);
+    }
+    #opu-paste-fab-wrap.dragging { cursor: grabbing; }
+
+    #opu-paste-fab {
+      width: calc(var(--ring-size) - 2*var(--pad));
+      height: calc(var(--ring-size) - 2*var(--pad));
+      border-radius: 50%;
+      background: #222; color: #fff; border: 1px solid #444;
+      display: inline-flex; align-items: center; justify-content: center;
+      font-size: 22px; line-height: 1; cursor: inherit; user-select: none;
+      -webkit-tap-highlight-color: transparent; text-align: center; padding: 6px;
+      position: relative; z-index: 1;
     }
     #opu-paste-fab:active { transform: scale(0.97); }
 
-    /* Portrait orientation: make FAB 2× bigger */
+    /* compact counter text inside the fab during fetch */
+    #opu-paste-fab .fab-status {
+      font-size: 14px; line-height: 1.1; color: #e7ffe7; white-space: nowrap;
+    }
+
+    /* Portrait orientation: larger touch target; keep pad at 8px */
     @media (orientation: portrait) {
-      #opu-paste-fab {
-        width: 112px;
-        height: 112px;
-        font-size: 44px;
-      }
+      #opu-paste-fab-wrap { --ring-size: 128px; }
+      #opu-paste-fab { font-size: 44px; }
+      #opu-paste-fab .fab-status { font-size: 20px; }
     }
 
     /* Toast */
     #opu-toast {
-      position: fixed;
-      bottom: 86px;
-      right: 16px;
-      background: rgba(20,20,20,0.95);
-      color: #fff;
-      padding: 8px 10px;
-      border-radius: 6px;
-      font-size: 12px;
-      z-index: 99999;
-      display: none;
-      max-width: 70vw;
-      word-break: break-word;
-      border: 1px solid #444;
+      position: fixed; bottom: 16px; right: calc(16px + 72px);
+      background: rgba(20,20,20,0.95); color: #fff; padding: 8px 10px;
+      border-radius: 6px; font-size: 12px; z-index: 99999; display: none;
+      max-width: 70vw; word-break: break-word; border: 1px solid #444;
     }
   `;
   document.head.appendChild(style);
@@ -160,7 +146,6 @@
     const ext = outExt || (m && m[2]) || '.jpg';
     return `${base}${suffix}${ext}`;
   }
-
   function toast(msg, ms = 2200) {
     let t = document.getElementById('opu-toast');
     if (!t) {
@@ -174,30 +159,76 @@
     t._timer = setTimeout(() => { t.style.display = 'none'; }, ms);
   }
 
-  // ---- clean any fallback preview from OPU
-  function nukeFallbackPreview() {
-    const fb = document.getElementById('xpc-ctrlv');
-    if (fb) fb.remove();
-    const dim = document.getElementById('dimensions-output');
-    if (dim) dim.remove();
+  // ---- FAB ring progress API (compact "n/N"; resets to track-only)
+  function getFabParts() {
+    const wrap = document.getElementById('opu-paste-fab-wrap');
+    const fab = document.getElementById('opu-paste-fab');
+    return { wrap, fab };
+  }
+  function setFabText(text) {
+    const { fab } = getFabParts();
+    if (!fab) return;
+    fab.innerHTML = '';
+    const span = document.createElement('span');
+    span.className = 'fab-status';
+    span.textContent = text;
+    fab.appendChild(span);
+  }
+  function setFabIcon(icon = '📋') {
+    const { fab } = getFabParts();
+    if (!fab) return;
+    fab.textContent = icon;
+  }
+  function progressStart(total) {
+    const { wrap } = getFabParts();
+    if (!wrap) return;
+    wrap.classList.add('in-progress');
+    wrap.style.setProperty('--pct', '0deg');
+    setFabText(`0/${total}`);
+    wrap._total = total;
+    wrap._done = 0;
+  }
+  function progressTick() {
+    const { wrap } = getFabParts();
+    if (!wrap || !wrap._total) return;
+    wrap._done++;
+    const pct = Math.max(0, Math.min(1, wrap._done / wrap._total));
+    const deg = Math.round(pct * 360);
+    wrap.style.setProperty('--pct', `${deg}deg`);
+    setFabText(`${wrap._done}/${wrap._total}`);
+  }
+  function progressDone(summary = 'Done') {
+    const { wrap } = getFabParts();
+    if (!wrap) return;
+    wrap.style.setProperty('--pct', '360deg');
+    setFabText(summary);
+    clearTimeout(wrap._fabTimer);
+    wrap._fabTimer = setTimeout(() => {
+      wrap.classList.remove('in-progress');      // returns to gray track
+      wrap.style.setProperty('--pct', '0deg');   // reset
+      setFabIcon('📋');                          // restore icon
+    }, 900);
+    wrap._total = 0; wrap._done = 0;
   }
 
-  // ---- preview table (and Sortable with mobile-friendly config)
+  // ---- clean OPU fallback preview
+  function nukeFallbackPreview() {
+    document.getElementById('xpc-ctrlv')?.remove();
+    document.getElementById('dimensions-output')?.remove();
+  }
+
+  // ---- preview table + Sortable
   function createTable() {
     const table = document.createElement('table');
     table.id = 'opu-preview-table';
     table.style.borderCollapse = 'collapse';
     table.style.marginTop = '15px';
-    const tbody = document.createElement('tbody');
-    table.appendChild(tbody);
+    table.appendChild(document.createElement('tbody'));
     return table;
   }
-
   function createOrUpdateSortable(tbody) {
     if (!window.Sortable) return;
-    if (tbody._sortable && typeof tbody._sortable.destroy === 'function') {
-      tbody._sortable.destroy();
-    }
+    if (tbody._sortable?.destroy) tbody._sortable.destroy();
     tbody._sortable = Sortable.create(tbody, {
       handle: '.opu-drag-handle',
       animation: 150,
@@ -211,103 +242,84 @@
       onEnd: updateFileInput
     });
   }
-
-  // ---- render root
-  function resetPreviews() {
-    document.getElementById('opu-preview-table')?.remove();
-  }
-
+  function resetPreviews() { document.getElementById('opu-preview-table')?.remove(); }
   function renderPreviews(files) {
     resetPreviews();
-    if (!files || !files.length) return;
-
+    if (!files?.length) return;
     const table = createTable();
     const tbody = table.querySelector('tbody');
-
     files.forEach(file => {
       const row = document.createElement('tr');
-
       const dragCell = document.createElement('td');
       dragCell.className = 'opu-drag-handle';
       dragCell.textContent = '☰';
       dragCell.setAttribute('aria-label', 'Drag handle');
       row.appendChild(dragCell);
-
       const cell = document.createElement('td');
       cell.style.position = 'relative';
       cell.style.padding = '10px';
       row.appendChild(cell);
-
       tbody.appendChild(row);
-      createPreview(cell, file, /*isOriginal*/ true);
+      createPreview(cell, file, true);
     });
-
     input.after(table);
     createOrUpdateSortable(tbody);
   }
 
-  // ---- overlays / tools
+  // ---- overlays / tools (resize/crop)
   function promptResize(wrapper, cell, file) {
     document.querySelectorAll('.resize-input').forEach(el => el.remove());
     const wand = wrapper.querySelector('.resize-btn');
     if (!wand) return;
-
     const inputResize = document.createElement('input');
     inputResize.type = 'text';
     inputResize.placeholder = '50 or 800x600 or 800x';
     inputResize.className = 'resize-input';
     Object.assign(inputResize.style, {
-      position: 'absolute',
-      left: '0',
-      top: '100%',
-      marginTop: '5px',
-      transform: 'translateX(-50%)',
-      width: '110px',
-      fontSize: '11px',
-      textAlign: 'center',
-      border: '1px solid #888',
-      outline: 'none',
-      zIndex: '100'
+      position: 'absolute', left: '0', top: '100%', marginTop: '5px',
+      transform: 'translateX(-50%)', width: '110px', fontSize: '11px',
+      textAlign: 'center', border: '1px solid #888', outline: 'none',
+      zIndex: '100', background: '#111', color: '#eee'
     });
-
     const overlay = wrapper.querySelector('.opu-overlay');
-    if (overlay) {
-      overlay.classList.add('locked');
-      overlay.style.display = 'flex';
-    }
-
+    overlay?.classList.add('locked');
+    if (overlay) overlay.style.display = 'flex';
     wand.parentElement.appendChild(inputResize);
     inputResize.focus();
-
     function cleanup() {
       inputResize.remove();
-      if (overlay) {
-        overlay.classList.remove('locked');
-        overlay.style.display = '';
-      }
+      if (overlay) { overlay.classList.remove('locked'); overlay.style.display = ''; }
       document.removeEventListener('pointerdown', onDocPointerDown, true);
     }
-
     function onDocPointerDown(event) {
       const withinOverlay = overlay && overlay.contains(event.target);
       const withinInput = inputResize.contains(event.target);
       if (!withinOverlay && !withinInput) cleanup();
     }
     document.addEventListener('pointerdown', onDocPointerDown, true);
-
     inputResize.addEventListener('keydown', (e) => {
       const img = wrapper.querySelector('img');
-      const ow = img.naturalWidth;
-      const oh = img.naturalHeight;
+      const ow = img?.naturalWidth || 0;
+      const oh = img?.naturalHeight || 0;
       const value = inputResize.value.trim();
-
       const percent = /^([1-9][0-9]?|100)$/;
       const fixed = /^(\d+)[xX](\d+)$/;
       const oneSide = /^(\d+)[xX]$|^[xX](\d+)$/;
-
       if (e.key === 'Enter') {
         e.preventDefault();
-
+        if (!ow || !oh) {
+          inputResize.value = 'ERROR';
+          inputResize.style.border = '2px solid red';
+          inputResize.style.color = 'red';
+          inputResize.style.animation = 'flash 0.3s ease-in-out 2';
+          inputResize.onanimationend = () => {
+            inputResize.style.border = '1px solid #888';
+            inputResize.style.color = '';
+            inputResize.style.animation = '';
+            inputResize.value = '';
+          };
+          return;
+        }
         let nw, nh;
         if (percent.test(value)) {
           const scale = parseInt(value, 10);
@@ -334,50 +346,43 @@
           };
           return;
         }
-
         resizeImage(wrapper, cell, file, nw, nh);
         cleanup();
       } else if (e.key === 'Escape') {
         cleanup();
       }
     });
-
-    inputResize.addEventListener('blur', () => {
-      setTimeout(() => {
-        if (document.body.contains(inputResize)) cleanup();
-      }, 50);
-    });
+    inputResize.addEventListener('blur', () => setTimeout(() => {
+      if (document.body.contains(inputResize)) cleanup();
+    }, 50));
   }
-
   function resizeImage(wrapper, cell, file, newW, newH) {
     const canvas = document.createElement('canvas');
     canvas.width = Math.max(1, Math.floor(newW));
     canvas.height = Math.max(1, Math.floor(newH));
     const ctx = canvas.getContext('2d');
     const img = wrapper.querySelector('img');
+    if (!img) return;
     ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-
     const outType = file.type.includes('png') ? 'image/png' : 'image/jpeg';
     const outExt = outType === 'image/png' ? '.png' : '.jpg';
     const quality = outType === 'image/jpeg' ? 0.85 : undefined;
-
     canvas.toBlob(blob => {
+      if (!blob) return;
       const outName = baseNamePlus(file, '_resized', outExt);
       const resizedFile = new File([blob], outName, { type: outType });
-
       wrapper.style.filter = 'brightness(40%)';
-      const rb = wrapper.querySelector('.resize-btn'); if (rb) rb.style.display = 'none';
-      const cb = wrapper.querySelector('.crop-btn'); if (cb) cb.style.display = 'none';
-
+      wrapper.querySelector('.resize-btn')?.style && (wrapper.querySelector('.resize-btn').style.display = 'none');
+      wrapper.querySelector('.crop-btn')?.style && (wrapper.querySelector('.crop-btn').style.display = 'none');
       const row = cell.closest('tr');
       const newCell = row.insertCell(cell.cellIndex + 1);
       newCell.style.position = 'relative';
       newCell.style.padding = '10px';
-      createPreview(newCell, resizedFile, /*isOriginal*/ false, cell);
+      createPreview(newCell, resizedFile, false, cell);
     }, outType, quality);
   }
-
   function openCropper(file, cell, wrapper) {
+    if (!window.Cropper) { toast('Cropper not ready yet.'); return; }
     const reader = new FileReader();
     reader.onload = function (e) {
       const modal = document.createElement('div');
@@ -391,28 +396,23 @@
           </div>
         </div>`;
       document.body.appendChild(modal);
-
       const cropImg = modal.querySelector('#opu-crop-img');
       const cropper = new Cropper(cropImg, { viewMode: 1 });
-
       modal.querySelector('#crop-cancel').onclick = () => modal.remove();
-
       modal.querySelector('#crop-confirm').onclick = () => {
         const croppedCanvas = cropper.getCroppedCanvas();
         croppedCanvas.toBlob(blob => {
+          if (!blob) return;
           const outName = baseNamePlus(file, '_cropped', '.jpg');
           const croppedFile = new File([blob], outName, { type: 'image/jpeg' });
-
           wrapper.style.filter = 'brightness(40%)';
-          const rb = wrapper.querySelector('.resize-btn'); if (rb) rb.style.display = 'none';
-          const cb = wrapper.querySelector('.crop-btn'); if (cb) cb.style.display = 'none';
-
+          wrapper.querySelector('.resize-btn')?.style && (wrapper.querySelector('.resize-btn').style.display = 'none');
+          wrapper.querySelector('.crop-btn')?.style && (wrapper.querySelector('.crop-btn').style.display = 'none');
           const row = cell.closest('tr');
           const newCell = row.insertCell(cell.cellIndex + 1);
           newCell.style.position = 'relative';
           newCell.style.padding = '10px';
-          createPreview(newCell, croppedFile, /*isOriginal*/ false, cell);
-
+          createPreview(newCell, croppedFile, false, cell);
           modal.remove();
           updateFileInput();
         }, 'image/jpeg');
@@ -420,13 +420,16 @@
     };
     reader.readAsDataURL(file);
   }
-
-  function createOverlay(wrapper, cell, file, isOriginal, originalCell) {
+  function createOverlay(wrapper, cell, file, isOriginal, originalCell, opts = { enableEdit: true }) {
     const overlay = document.createElement('div');
     overlay.className = 'opu-overlay';
-    overlay.innerHTML = `<span class="delete-btn">❌</span><span class="resize-btn">🪄</span><span class="crop-btn">✂️</span>`;
-
+    overlay.innerHTML = `
+      <span class="opu-btn delete-btn" title="Delete">❌</span>
+      ${opts.enableEdit ? '<span class="opu-btn resize-btn" title="Resize">🪄</span><span class="opu-btn crop-btn" title="Crop">✂️</span>' : ''}
+    `;
     overlay.querySelector('.delete-btn').onclick = () => {
+      const url = wrapper._url;
+      if (url) URL.revokeObjectURL(url);
       const row = cell.closest('tr');
       const isEdit = !isOriginal && originalCell;
       if (isEdit && originalCell) {
@@ -441,160 +444,152 @@
       if (nonHandleCells.length === 0) row.remove();
       updateFileInput();
     };
-
-    overlay.querySelector('.resize-btn').onclick = () => promptResize(wrapper, cell, file);
-    overlay.querySelector('.crop-btn').onclick = () => openCropper(file, cell, wrapper);
+    if (opts.enableEdit) {
+      overlay.querySelector('.resize-btn').onclick = () => promptResize(wrapper, cell, file);
+      overlay.querySelector('.crop-btn').onclick = () => openCropper(file, cell, wrapper);
+    }
     return overlay;
   }
-
   function createPreview(cell, file, isOriginal, originalCell = null) {
-    const ext = file.name.toLowerCase().split('.').pop();
+    const nameLower = file.name.toLowerCase();
+    const ext = nameLower.includes('.') ? nameLower.split('.').pop() : '';
     const isSupported = SUPPORTED_EXT.includes(ext);
     const wrapper = document.createElement('div');
     wrapper.style.position = 'relative';
     wrapper._file = file;
     wrapper.dataset.filename = file.name;
-
     const info = document.createElement('span');
     info.style.fontSize = '12px';
     info.style.textAlign = 'left';
     info.style.display = 'block';
-
+    info.style.color = '#ddd';
     if (!isSupported) {
       const box = document.createElement('div');
       box.className = 'opu-unsupported-box';
-      box.textContent = `.${ext}`;
+      box.textContent = `.${ext || 'file'}`;
       wrapper.appendChild(box);
-      info.textContent = `${file.name}, ${formatFileSize(file.size)}`;
+      info.textContent = `${truncateName(file.name)}\n${formatFileSize(file.size)}`;
       wrapper.appendChild(info);
+      const overlay = createOverlay(wrapper, cell, file, isOriginal, originalCell, { enableEdit: false });
+      function showOverlay() { overlay.style.display = 'flex'; }
+      function hideOverlay() { if (!overlay.classList.contains('locked')) overlay.style.display = 'none'; }
+      wrapper.addEventListener('mouseenter', showOverlay);
+      wrapper.addEventListener('mouseleave', hideOverlay);
+      wrapper.addEventListener('touchstart', () => { showOverlay(); }, { passive: true });
+      wrapper.appendChild(overlay);
       cell.appendChild(wrapper);
-         }
-
+      return;
+    }
+    const url = URL.createObjectURL(file);
+    wrapper._url = url;
     const previewImg = new Image();
-    previewImg.src = URL.createObjectURL(file);
+    previewImg.src = url;
     previewImg.style.maxWidth = '200px';
     previewImg.style.maxHeight = '150px';
-
     previewImg.onload = () => {
+      URL.revokeObjectURL(url);
+      wrapper._url = null;
       info.innerHTML = `${truncateName(file.name)}<br>${previewImg.naturalWidth}×${previewImg.naturalHeight}px<br>${formatFileSize(file.size)}`;
     };
-
-    const overlay = createOverlay(wrapper, cell, file, isOriginal, originalCell);
-
-    // overlay show/hide helpers (no auto-hide while "locked")
+    previewImg.onerror = () => {
+      URL.revokeObjectURL(url);
+      wrapper._url = null;
+      wrapper.innerHTML = '';
+      const box = document.createElement('div');
+      box.className = 'opu-unsupported-box';
+      box.textContent = `.${ext || 'file'}`;
+      wrapper.appendChild(box);
+      info.textContent = `${truncateName(file.name)}\n${formatFileSize(file.size)}`;
+      wrapper.appendChild(info);
+      const overlay = createOverlay(wrapper, cell, file, isOriginal, originalCell, { enableEdit: false });
+      wrapper.appendChild(overlay);
+      cell.appendChild(wrapper);
+      return;
+    };
+    const overlay = createOverlay(wrapper, cell, file, isOriginal, originalCell, { enableEdit: true });
     function showOverlay() { overlay.style.display = 'flex'; }
     function hideOverlay() { if (!overlay.classList.contains('locked')) overlay.style.display = 'none'; }
-
-    // desktop hover
     wrapper.addEventListener('mouseenter', showOverlay);
     wrapper.addEventListener('mouseleave', hideOverlay);
-
-    // mobile tap: just show; outside tap hides (handled in promptResize via lock)
     wrapper.addEventListener('touchstart', () => { showOverlay(); }, { passive: true });
-
     wrapper.appendChild(previewImg);
     wrapper.appendChild(info);
     wrapper.appendChild(overlay);
     cell.appendChild(wrapper);
   }
 
-  // ---- Clipboard helpers for mobile FAB
-  async function tryClipboardReadImages() {
-    if (!(navigator.clipboard && navigator.clipboard.read)) return [];
-    try {
-      const items = await navigator.clipboard.read();
-      const files = [];
-      for (const item of items) {
-        for (const type of item.types) {
-          if (type.startsWith('image/')) {
-            const blob = await item.getType(type);
-            const ext = (type.split('/')[1] || 'png').split(';')[0];
-            files.push(new File([blob], `pasted_${Date.now()}.${ext}`, { type }));
-          }
-        }
-      }
-      return files;
-    } catch (e) {
-      console.debug('[OPUh] clipboard.read() failed:', e);
-      return [];
-    }
+  // ---- URL parsing + fetch helpers (sequential; updates ring)
+  const URL_REGEX = /https?:\/\/[^\s<>"'`]+/gi;
+  function sanitizeUrl(u) { return u.replace(/[),.;:]+$/, ''); }
+  function looksImageUrl(u) { return /\.(png|jpe?g|webp|gif|bmp|svg)(\?|#|$)/i.test(u); }
+  function extFromCTorURL(ct, u) {
+    if (ct && ct.startsWith('image/')) return ct.split('/')[1].split(';')[0];
+    const m = u.toLowerCase().match(/\.(png|jpe?g|jpg|webp|gif|bmp|svg)(\?|#|$)/i);
+    return m ? (m[1] === 'jpg' ? 'jpeg' : m[1]) : 'png';
   }
-
-  async function tryClipboardReadImageURL() {
-    if (!(navigator.clipboard && navigator.clipboard.readText)) return null;
+  async function fetchImageAsFile(u, timeoutMs = 15000) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      const t = (await navigator.clipboard.readText()).trim();
-      if (!/^https?:\/\//i.test(t)) return null;
-      const looksImage = /\.(png|jpe?g|webp|gif|bmp|svg)(\?|#|$)/i.test(t);
-      const resp = await fetch(t, { mode: 'cors' });
-      if (!resp.ok) return null;
+      const resp = await fetch(u, { mode: 'cors', signal: controller.signal });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
       const ct = resp.headers.get('content-type') || '';
-      if (!ct.startsWith('image/') && !looksImage) return null;
+      if (!(ct.startsWith('image/') || looksImageUrl(u))) throw new Error('not image');
       const blob = await resp.blob();
-      const ext = (ct.startsWith('image/') ? ct.split('/')[1] : (t.split('.').pop() || 'png')).split(';')[0];
-      const file = new File([blob], `pasted_${Date.now()}.${ext}`, { type: blob.type || 'image/*' });
-      return file;
-    } catch (e) {
-      console.debug('[OPUh] fetch clipboard URL failed:', e);
-      return null;
+      const ext = extFromCTorURL(ct, u);
+      const safeName = `pasted_${Date.now()}_${Math.random().toString(36).slice(2,7)}.${ext}`;
+      return new File([blob], safeName, { type: blob.type || `image/${ext}` });
+    } finally { clearTimeout(timer); }
+  }
+  function extractUrls(text, maxCount = 20) {
+    const raw = (text || '').match(URL_REGEX) || [];
+    const urls = Array.from(new Set(raw.map(sanitizeUrl)));
+    return urls.slice(0, maxCount);
+  }
+  async function filesFromTextURLsProgress(text) {
+    const urls = extractUrls(text);
+    if (!urls.length) return { files: [], totalTried: 0, fails: 0 };
+    progressStart(urls.length);
+    const files = [];
+    let fails = 0;
+    for (const u of urls) {
+      try {
+        const f = await fetchImageAsFile(u);
+        if (f) files.push(f); else fails++;
+      } catch { fails++; }
+      finally { progressTick(); }
     }
+    return { files, totalTried: urls.length, fails };
   }
 
-  async function handleMobilePaste() {
-    // Must run in a user gesture (button tap)
-    let images = await tryClipboardReadImages();
-    if (images.length) {
-      addImages(images);
-      toast(`Pasted ${images.length} image${images.length > 1 ? 's' : ''} from clipboard`);
-      return;
-    }
-    const fileFromURL = await tryClipboardReadImageURL();
-    if (fileFromURL) {
-      addImages([fileFromURL]);
-      toast('Pasted image from clipboard link');
-      return;
-    }
-    toast('Clipboard has no image (or browser blocked access).');
-  }
-
-  // ---- rebuild input files in exact DOM order (no async)
+  // ---- rebuild input files in exact DOM order
   function updateFileInput() {
+    if (!input) return;
     const dt = new DataTransfer();
     const table = document.getElementById('opu-preview-table');
-    if (!table) {
-      input.files = dt.files;
-      return;
-    }
-
-    // left-to-right within row, row-by-row; skip dimmed (source of an edit)
+    if (!table) { input.files = dt.files; return; }
     const rows = Array.from(table.querySelectorAll('tbody tr'));
     rows.forEach(row => {
       const cells = Array.from(row.cells).slice(1);
       cells.forEach(cell => {
         const wrapper = cell.querySelector('div');
         if (!wrapper) return;
-        if (wrapper.style.filter === 'brightness(40%)') return; // not active
+        if (wrapper.style.filter === 'brightness(40%)') return;
         const f = wrapper._file;
         if (f instanceof File) dt.items.add(f);
       });
     });
-
     input.files = dt.files;
-
-    if (dt.files.length === 0) {
-      resetPreviews();
-      input.value = '';
-    }
+    if (dt.files.length === 0) { resetPreviews(); input.value = ''; }
   }
 
   // ---- add images helper (merges with existing)
   function addImages(files) {
-    if (!files || !files.length) return;
-    const existing = Array.from(input.files);
+    if (!files?.length || !input) return;
+    const existing = Array.from(input.files || []);
     const dt = new DataTransfer();
     existing.concat(files).forEach(f => dt.items.add(f));
     input.files = dt.files;
-
     const table = document.getElementById('opu-preview-table');
     if (!table) {
       renderPreviews(Array.from(dt.files));
@@ -602,24 +597,115 @@
       const tbody = table.querySelector('tbody');
       files.forEach(file => {
         const row = document.createElement('tr');
-
         const dragCell = document.createElement('td');
         dragCell.className = 'opu-drag-handle';
         dragCell.textContent = '☰';
         dragCell.setAttribute('aria-label', 'Drag handle');
         row.appendChild(dragCell);
-
         const cell = document.createElement('td');
         cell.style.position = 'relative';
         cell.style.padding = '10px';
         row.appendChild(cell);
-
         tbody.appendChild(row);
-        createPreview(cell, file, /*isOriginal*/ true);
+        createPreview(cell, file, true);
       });
       createOrUpdateSortable(tbody);
       updateFileInput();
     }
+  }
+
+  // ---- draggable FAB (saves position)
+  const FAB_POS_KEY = 'OPUh.fab.pos.v1';
+  function clamp(n, min, max) { return Math.max(min, Math.min(max, n)); }
+  function applyFabPos(wrap, pos) {
+    const rect = wrap.getBoundingClientRect();
+    const vw = window.innerWidth, vh = window.innerHeight;
+    const left = clamp(pos.left, 4, vw - rect.width - 4);
+    const top  = clamp(pos.top,  4, vh - rect.height - 4);
+    wrap.style.left = `${left}px`;
+    wrap.style.top = `${top}px`;
+    wrap.style.right = '';
+    wrap.style.bottom = '';
+  }
+  function loadFabPos(wrap) {
+    try {
+      const raw = localStorage.getItem(FAB_POS_KEY);
+      if (!raw) return;
+      const pos = JSON.parse(raw);
+      if (pos && typeof pos.left === 'number' && typeof pos.top === 'number') {
+        applyFabPos(wrap, pos);
+      }
+    } catch {}
+  }
+  function saveFabPos(wrap) {
+    const rect = wrap.getBoundingClientRect();
+    const pos = { left: Math.round(rect.left), top: Math.round(rect.top) };
+    try { localStorage.setItem(FAB_POS_KEY, JSON.stringify(pos)); } catch {}
+  }
+  function makeFabDraggable(wrap, fab) {
+    let active = false, moved = false, sx = 0, sy = 0, startLeft = 0, startTop = 0;
+    const onDown = (e) => {
+      // allow starting drag from either wrap or button
+      const ev = e.touches ? e.touches[0] : e;
+      const rect = wrap.getBoundingClientRect();
+      sx = ev.clientX; sy = ev.clientY;
+      startLeft = rect.left; startTop = rect.top;
+      active = true; moved = false;
+      wrap.classList.add('dragging');
+      wrap.setPointerCapture?.(e.pointerId ?? undefined);
+      // convert bottom/right to left/top before moving
+      wrap.style.left = `${startLeft}px`;
+      wrap.style.top = `${startTop}px`;
+      wrap.style.right = '';
+      wrap.style.bottom = '';
+      e.preventDefault();
+    };
+    const onMove = (e) => {
+      if (!active) return;
+      const ev = e.touches ? e.touches[0] : e;
+      const dx = ev.clientX - sx;
+      const dy = ev.clientY - sy;
+      if (Math.abs(dx) + Math.abs(dy) > 3) moved = true;
+      const vw = window.innerWidth, vh = window.innerHeight;
+      const rect = wrap.getBoundingClientRect();
+      let left = startLeft + dx;
+      let top  = startTop + dy;
+      left = clamp(left, 4, vw - rect.width - 4);
+      top  = clamp(top,  4, vh - rect.height - 4);
+      wrap.style.left = `${left}px`;
+      wrap.style.top = `${top}px`;
+      e.preventDefault();
+    };
+    const onUp = (e) => {
+      if (!active) return;
+      active = false;
+      wrap.classList.remove('dragging');
+      if (moved) {
+        saveFabPos(wrap);
+        // prevent accidental click after drag
+        wrap._justDragged = true;
+        setTimeout(() => { wrap._justDragged = false; }, 200);
+      }
+      wrap.releasePointerCapture?.(e.pointerId ?? undefined);
+      e.preventDefault();
+    };
+    // Pointer + touch + mouse (for Safari)
+    wrap.addEventListener('pointerdown', onDown);
+    wrap.addEventListener('pointermove', onMove);
+    wrap.addEventListener('pointerup', onUp);
+    wrap.addEventListener('touchstart', onDown, { passive: false });
+    wrap.addEventListener('touchmove', onMove, { passive: false });
+    wrap.addEventListener('touchend', onUp, { passive: false });
+    window.addEventListener('resize', () => {
+      // clamp to viewport on resize/orientation change
+      const rect = wrap.getBoundingClientRect();
+      applyFabPos(wrap, { left: rect.left, top: rect.top });
+      saveFabPos(wrap);
+    });
+    // guard the actual click handler
+    fab.addEventListener('click', (e) => {
+      if (wrap._justDragged) { e.stopPropagation(); e.preventDefault(); }
+    }, true);
   }
 
   // ---- events
@@ -627,22 +713,33 @@
     input.addEventListener('change', () => renderPreviews(Array.from(input.files)));
   }
 
-  // PASTE images via keyboard (desktop)
-  document.addEventListener('paste', (e) => {
+  // Desktop paste: files OR multiple URLs with ring progress (compact counter)
+  document.addEventListener('paste', async (e) => {
     const items = e.clipboardData?.items || [];
     const images = [];
     for (const item of items) {
-      if (item.kind === 'file' && item.type.startsWith('image/')) {
-        images.push(item.getAsFile());
-      }
+      if (item.kind === 'file' && item.type.startsWith('image/')) images.push(item.getAsFile());
     }
     if (images.length) {
       e.preventDefault();
       addImages(images);
+      toast(`Pasted ${images.length} image${images.length>1?'s':''}`);
+      return;
+    }
+    const text = e.clipboardData?.getData('text')?.trim();
+    if (text) {
+      const urls = extractUrls(text);
+      if (urls.length) {
+        e.preventDefault();
+        const { files, totalTried, fails } = await filesFromTextURLsProgress(text);
+        if (files.length) addImages(files);
+        progressDone(`${files.length}/${totalTried}`);
+        if (!files.length) toast('No fetchable images (CORS/format blocked).');
+      }
     }
   });
 
-  // DRAG & DROP images
+  // Drag & drop files
   window.addEventListener('dragover', e => e.preventDefault(), { passive: false });
   window.addEventListener('drop', e => {
     e.preventDefault();
@@ -651,7 +748,45 @@
     if (images.length) addImages(images);
   });
 
-  // ---- init on load
+  // Mobile FAB click handler
+  async function handleMobilePaste() {
+    const { wrap } = getFabParts();
+    if (wrap?._justDragged) return; // ignore click right after drag
+
+    // image blobs first
+    let images = [];
+    if (navigator.clipboard?.read) {
+      try {
+        const items = await navigator.clipboard.read();
+        for (const item of items) {
+          for (const type of item.types) {
+            if (type.startsWith('image/')) {
+              const blob = await item.getType(type);
+              const ext = (type.split('/')[1] || 'png').split(';')[0];
+              images.push(new File([blob], `pasted_${Date.now()}.${ext}`, { type }));
+            }
+          }
+        }
+      } catch (e) { /* ignore */ }
+    }
+    if (images.length) {
+      addImages(images);
+      toast(`Pasted ${images.length} image${images.length>1?'s':''}`);
+      return;
+    }
+
+    // then URLs
+    if (!(navigator.clipboard?.readText)) { toast('Clipboard has no image (or URLs blocked).'); return; }
+    const text = (await navigator.clipboard.readText()).trim();
+    if (!text) { toast('Clipboard is empty.'); return; }
+
+    const { files, totalTried } = await filesFromTextURLsProgress(text);
+    if (files.length) addImages(files);
+    progressDone(`${files.length}/${totalTried}`);
+    if (!files.length) toast('No fetchable images (CORS/format blocked).');
+  }
+
+  // ---- init
   window.addEventListener('load', () => {
     if (input) input.value = '';
 
@@ -662,26 +797,31 @@
 
     nukeFallbackPreview();
 
-    // FAB paste button (doubles in portrait via CSS)
+    // FAB wrap + button
+    const wrap = document.createElement('div');
+    wrap.id = 'opu-paste-fab-wrap';
     const fab = document.createElement('div');
     fab.id = 'opu-paste-fab';
+    fab.textContent = '📋';
     fab.title = 'Paste from clipboard';
     fab.setAttribute('aria-label', 'Paste from clipboard');
-    fab.textContent = '📋';
     fab.addEventListener('click', handleMobilePaste, { passive: true });
-    document.body.appendChild(fab);
+    wrap.appendChild(fab);
+    document.body.appendChild(wrap);
 
-    // Keep nuking any late-added fallback junk and log DOM readiness (for Tigo)
+    // restore saved position (if any)
+    loadFabPos(wrap);
+    // make draggable + persist
+    makeFabDraggable(wrap, fab);
+
+    // Keep nuking any late-added fallback junk and log DOM readiness
     const observer = new MutationObserver(() => {
       nukeFallbackPreview();
-      if (document && document.body) {
-        if (!window.__OPUhLoggedReady) {
-          window.__OPUhLoggedReady = true;
-          console.log('[OPUh] DOM available and ready.');
-        }
+      if (document && document.body && !window.__OPUhLoggedReady) {
+        window.__OPUhLoggedReady = true;
+        console.log('[OPUh] DOM available and ready.');
       }
     });
     observer.observe(document.documentElement || document, { childList: true, subtree: true });
   });
 })();
-
